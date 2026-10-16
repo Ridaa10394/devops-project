@@ -1,0 +1,17 @@
+$ helm lint stocksense
+==> Linting helm/stocksense
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+$ helm lint stocksense -f values-dev.yaml
+==> Linting helm/stocksense
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+$ helm lint stocksense -f values-prod.yaml --set global.imageTag=abc1234
+==> Linting helm/stocksense
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed

@@ -1,0 +1,23 @@
+# switching final-app from the raw kubernetes/ manifests to the Helm chart
+
+$ kubectl delete -k kubernetes/ --ignore-not-found 2>&1 | grep -v 'namespace/final-app'
+namespace "final-app" deleted
+configmap "stocksense-config" deleted from final-app namespace
+secret "stocksense-db" deleted from final-app namespace
+service "stocksense-backend" deleted from final-app namespace
+service "stocksense-frontend" deleted from final-app namespace
+service "stocksense-postgres" deleted from final-app namespace
+deployment.apps "stocksense-backend" deleted from final-app namespace
+deployment.apps "stocksense-frontend" deleted from final-app namespace
+statefulset.apps "stocksense-postgres" deleted from final-app namespace
+horizontalpodautoscaler.autoscaling "stocksense-backend" deleted from final-app namespace
+horizontalpodautoscaler.autoscaling "stocksense-frontend" deleted from final-app namespace
+ingress.networking.k8s.io "stocksense" deleted from final-app namespace
+
+$ kubectl -n final-app delete pvc data-stocksense-postgres-0 --ignore-not-found
+
+$ kubectl apply -f kubernetes/00-namespace.yaml
+namespace/final-app created
+
+$ kubectl -n final-app get all,pvc
+No resources found in final-app namespace.

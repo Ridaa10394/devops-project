@@ -1,0 +1,40 @@
+$ FRONTEND_PORT=13000 BACKEND_PORT=18000 docker compose up -d --build   # 3000/8000 were taken by another project on my machine
+ Image stocksense-backend:local Building 
+ Image stocksense-frontend:local Building 
+
+ Image stocksense-backend:local Built 
+ Image stocksense-frontend:local Built 
+ Network stocksense_backend-net Creating 
+ Volume stocksense_postgres-data Creating 
+ Network stocksense_frontend-net Creating 
+ Volume stocksense_postgres-data Creating 
+ Network stocksense_backend-net Creating 
+ Network stocksense_frontend-net Creating 
+ Volume stocksense_postgres-data Created 
+ Volume stocksense_postgres-data Created 
+ Network stocksense_backend-net Created 
+ Network stocksense_backend-net Created 
+ Container stocksense-postgres-1 Creating 
+ Network stocksense_frontend-net Created 
+ Network stocksense_frontend-net Created 
+ Container stocksense-postgres-1 Created 
+ Container stocksense-backend-1 Creating 
+ Container stocksense-backend-1 Created 
+ Container stocksense-frontend-1 Creating 
+ Container stocksense-frontend-1 Created 
+ Container stocksense-postgres-1 Starting 
+ Container stocksense-postgres-1 Started 
+ Container stocksense-postgres-1 Waiting 
+ Container stocksense-postgres-1 Healthy 
+ Container stocksense-backend-1 Starting 
+ Container stocksense-backend-1 Started 
+ Container stocksense-backend-1 Waiting 
+ Container stocksense-backend-1 Healthy 
+ Container stocksense-frontend-1 Starting 
+ Container stocksense-frontend-1 Started 
+
+$ docker compose ps
+NAME                    IMAGE                       COMMAND                  SERVICE    CREATED          STATUS                            PORTS
+stocksense-backend-1    stocksense-backend:local    "./docker-entrypoint…"   backend    20 seconds ago   Up 13 seconds (healthy)           0.0.0.0:18000->8000/tcp, [::]:18000->8000/tcp
+stocksense-frontend-1   stocksense-frontend:local   "/docker-entrypoint.…"   frontend   20 seconds ago   Up 8 seconds (health: starting)   0.0.0.0:13000->8080/tcp, [::]:13000->8080/tcp
+stocksense-postgres-1   postgres:16-alpine          "docker-entrypoint.s…"   postgres   20 seconds ago   Up 19 seconds (healthy)           5432/tcp

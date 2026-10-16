@@ -1,0 +1,14 @@
+# Non-secret settings. The backend reads these as env vars (pydantic-settings).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stocksense-config
+  namespace: final-app
+  labels: {app.kubernetes.io/part-of: stocksense}
+data:
+  APP_ENV: "kubernetes"
+  DB_HOST: "stocksense-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "stocksense"
+  # the frontend nginx proxies /api/ here (rendered into nginx.conf at start-up)
+  BACKEND_ADDR: "http://stocksense-backend:8000" # BROKEN: key renamed, frontend still asks for BACKEND_URL

@@ -1,0 +1,93 @@
+########## BREAK ##########
+
+$ kubectl apply -f troubleshooting/broken/1-bad-image-tag.yaml
+deployment.apps/stocksense-backend configured
+
+$ kubectl -n final-app rollout status deploy/stocksense-backend --timeout=60s
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+error: timed out waiting for the condition
+
+########## INVESTIGATE ##########
+
+$ kubectl -n final-app get pods -l app=stocksense-backend
+NAME                                  READY   STATUS                  RESTARTS   AGE
+stocksense-backend-59496b7dbd-6sqfg   1/1     Running                 0          3m42s
+stocksense-backend-59496b7dbd-c2v5w   1/1     Running                 0          3m42s
+stocksense-backend-868b6d849b-5mh4q   0/1     Init:ImagePullBackOff   0          60s
+
+$ kubectl -n final-app describe pod stocksense-backend-868b6d849b-5mh4q | sed -n '/Init Containers:/,/Ready:/p;/Events:/,$p'
+Init Containers:
+  migrate:
+    Container ID:  
+    Image:         stocksense-backend:1.0.1
+    Image ID:      
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      sh
+      -c
+      python -m app.wait_for_db && alembic upgrade head
+    State:          Waiting
+      Reason:       ImagePullBackOff
+    Ready:          False
+Events:
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  60s                default-scheduler  Successfully assigned final-app/stocksense-backend-868b6d849b-5mh4q to minikube
+  Normal   BackOff    27s (x2 over 57s)  kubelet            spec.initContainers{migrate}: Back-off pulling image "stocksense-backend:1.0.1"
+  Warning  Failed     27s (x2 over 57s)  kubelet            spec.initContainers{migrate}: Error: ImagePullBackOff
+  Normal   Pulling    14s (x3 over 59s)  kubelet            spec.initContainers{migrate}: Pulling image "stocksense-backend:1.0.1"
+  Warning  Failed     12s (x3 over 57s)  kubelet            spec.initContainers{migrate}: Failed to pull image "stocksense-backend:1.0.1": failed to pull and unpack image "docker.io/library/stocksense-backend:1.0.1": failed to resolve reference "docker.io/library/stocksense-backend:1.0.1": pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed
+  Warning  Failed     12s (x3 over 57s)  kubelet            spec.initContainers{migrate}: Error: ErrImagePull
+
+$ kubectl -n final-app get events --field-selector involvedObject.name=stocksense-backend-868b6d849b-5mh4q --sort-by=.lastTimestamp | tail -8
+LAST SEEN   TYPE      REASON      OBJECT                                    MESSAGE
+60s         Normal    Scheduled   pod/stocksense-backend-868b6d849b-5mh4q   Successfully assigned final-app/stocksense-backend-868b6d849b-5mh4q to minikube
+27s         Normal    BackOff     pod/stocksense-backend-868b6d849b-5mh4q   Back-off pulling image "stocksense-backend:1.0.1"
+27s         Warning   Failed      pod/stocksense-backend-868b6d849b-5mh4q   Error: ImagePullBackOff
+14s         Normal    Pulling     pod/stocksense-backend-868b6d849b-5mh4q   Pulling image "stocksense-backend:1.0.1"
+12s         Warning   Failed      pod/stocksense-backend-868b6d849b-5mh4q   Failed to pull image "stocksense-backend:1.0.1": failed to pull and unpack image "docker.io/library/stocksense-backend:1.0.1": failed to resolve reference "docker.io/library/stocksense-backend:1.0.1": pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed
+12s         Warning   Failed      pod/stocksense-backend-868b6d849b-5mh4q   Error: ErrImagePull
+
+$ kubectl -n final-app get deploy stocksense-backend -o jsonpath='{.spec.template.spec.containers[0].image}{"
+"}'
+stocksense-backend:1.0.1
+
+$ kubectl -n final-app rollout history deploy/stocksense-backend
+deployment.apps/stocksense-backend 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+
+
+$ curl -s -o /dev/null -w 'app still answering through ingress: HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items
+app still answering through ingress: HTTP 200
+
+########## FIX ##########
+
+$ kubectl -n final-app rollout undo deploy/stocksense-backend
+Warning: resource deployments/stocksense-backend was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+deployment.apps/stocksense-backend rolled back
+
+$ kubectl apply -f troubleshooting/fixed/1-bad-image-tag.yaml
+deployment.apps/stocksense-backend configured
+
+$ kubectl -n final-app rollout status deploy/stocksense-backend --timeout=180s
+deployment "stocksense-backend" successfully rolled out
+
+########## VERIFY ##########
+
+$ kubectl -n final-app get pods -l app=stocksense-backend -o wide
+NAME                                  READY   STATUS        RESTARTS   AGE     IP             NODE       NOMINATED NODE   READINESS GATES
+stocksense-backend-59496b7dbd-6sqfg   1/1     Running       0          3m43s   10.244.0.106   minikube   <none>           <none>
+stocksense-backend-59496b7dbd-c2v5w   1/1     Running       0          3m43s   10.244.0.104   minikube   <none>           <none>
+stocksense-backend-868b6d849b-5mh4q   0/1     Terminating   0          61s     10.244.0.110   minikube   <none>           <none>
+
+$ kubectl -n final-app get deploy stocksense-backend -o jsonpath='{.spec.template.spec.containers[0].image}{"
+"}'
+stocksense-backend:1.0.0
+
+$ curl -s -w '  HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items/stats
+{"total_items":7,"total_units":246,"low_stock":1,"out_of_stock":1,"inventory_value":"3081.18","categories":5}  HTTP 200

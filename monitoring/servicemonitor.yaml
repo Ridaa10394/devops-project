@@ -1,0 +1,20 @@
+# Tells the Prometheus Operator to scrape the StockSense backend's /metrics.
+# (Same object the Helm chart renders when monitoring.serviceMonitor.enabled=true;
+# this standalone copy matches the raw kubernetes/ manifests' labels.)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stocksense-backend
+  namespace: final-app
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: stocksense-backend       # label on the stocksense-backend Service
+  namespaceSelector:
+    matchNames: [final-app]
+  endpoints:
+    - port: http                    # named Service port (8000)
+      path: /metrics
+      interval: 15s

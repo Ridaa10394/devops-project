@@ -1,0 +1,77 @@
+########## BREAK ##########
+
+$ kubectl apply -f troubleshooting/broken/2-service-selector-mismatch.yaml
+service/stocksense-frontend configured
+
+########## INVESTIGATE ##########
+
+$ curl -s -w '
+HTTP %{http_code}
+' http://stocksense.localhost:18210/ | tail -4
+</body>
+</html>
+
+HTTP 503
+
+$ curl -s -o /dev/null -w '/api still works: HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items
+/api still works: HTTP 200
+
+$ kubectl -n final-app get pods -l app=stocksense-frontend
+NAME                                   READY   STATUS    RESTARTS   AGE
+stocksense-frontend-6b5c74ccc8-7d4r4   1/1     Running   0          3m56s
+stocksense-frontend-6b5c74ccc8-9b6cx   1/1     Running   0          3m56s
+
+$ kubectl -n final-app get svc stocksense-frontend -o wide
+NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE     SELECTOR
+stocksense-frontend   ClusterIP   10.97.175.187   <none>        80/TCP    3m56s   app=stocksense-fronted
+
+$ kubectl -n final-app get endpointslices -l kubernetes.io/service-name=stocksense-frontend
+NAME                        ADDRESSTYPE   PORTS     ENDPOINTS   AGE
+stocksense-frontend-w9rjw   IPv4          <unset>   <unset>     3m56s
+
+$ kubectl -n final-app describe svc stocksense-frontend
+Name:                     stocksense-frontend
+Namespace:                final-app
+Labels:                   app=stocksense-frontend
+                          app.kubernetes.io/part-of=stocksense
+Annotations:              <none>
+Selector:                 app=stocksense-fronted
+Type:                     ClusterIP
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.97.175.187
+IPs:                      10.97.175.187
+Port:                     http  80/TCP
+TargetPort:               http/TCP
+Endpoints:                
+Session Affinity:         None
+Internal Traffic Policy:  Cluster
+Events:                   <none>
+
+$ kubectl -n final-app get pods --show-labels | grep -E 'NAME|frontend'
+NAME                                   READY   STATUS    RESTARTS   AGE     LABELS
+stocksense-frontend-6b5c74ccc8-7d4r4   1/1     Running   0          3m57s   app.kubernetes.io/part-of=stocksense,app=stocksense-frontend,pod-template-hash=6b5c74ccc8
+stocksense-frontend-6b5c74ccc8-9b6cx   1/1     Running   0          3m57s   app.kubernetes.io/part-of=stocksense,app=stocksense-frontend,pod-template-hash=6b5c74ccc8
+
+$ kubectl -n final-app get pods -l app=stocksense-fronted
+No resources found in final-app namespace.
+
+$ kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --since=60s | grep -i 'stocksense-frontend' | tail -3
+W1007 12:16:06.927022       7 controller.go:1241] Service "final-app/stocksense-frontend" does not have any active Endpoint.
+127.0.0.1 - - [07/Oct/2026:12:16:08 +0000] "GET / HTTP/1.1" 503 190 "-" "curl/8.7.1" 89 0.000 [final-app-stocksense-frontend-80] [] - - - - ac366f1a14888da0dbf83416473c4792
+
+########## FIX ##########
+
+$ kubectl apply -f troubleshooting/fixed/2-service-selector-mismatch.yaml
+service/stocksense-frontend configured
+
+########## VERIFY ##########
+
+$ kubectl -n final-app get endpointslices -l kubernetes.io/service-name=stocksense-frontend
+NAME                        ADDRESSTYPE   PORTS   ENDPOINTS                   AGE
+stocksense-frontend-w9rjw   IPv4          8080    10.244.0.103,10.244.0.105   4m2s
+
+$ curl -s -o /dev/null -w 'GET / -> HTTP %{http_code}
+' http://stocksense.localhost:18210/
+GET / -> HTTP 200

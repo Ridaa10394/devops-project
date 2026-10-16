@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stocksense-frontend
+  namespace: final-app
+  labels: {app: stocksense-frontend, app.kubernetes.io/part-of: stocksense}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: stocksense-frontend}
+  template:
+    metadata:
+      labels: {app: stocksense-frontend, app.kubernetes.io/part-of: stocksense}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: frontend
+          image: stocksense-frontend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: BACKEND_URL
+              valueFrom: {configMapKeyRef: {name: stocksense-config, key: BACKEND_URL}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: # nginx needs these two writable even with a read-only root fs
+            - {name: tmp, mountPath: /tmp}
+            - {name: conf, mountPath: /etc/nginx/conf.d}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+        - {name: conf, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stocksense-frontend
+  namespace: final-app
+  labels: {app: stocksense-frontend, app.kubernetes.io/part-of: stocksense}
+spec:
+  type: ClusterIP
+  selector: {app: stocksense-frontend}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

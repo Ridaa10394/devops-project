@@ -1,0 +1,28 @@
+# GitOps demo I ran before this repo (devops-project) was pushed: for a live
+# sync I pointed Argo CD at a chart that already was on GitHub - my own
+# Session 15 chart (14-helm/my-web-chart, plain nginx) in my course repo
+# Ridaa10394/DevOps.
+# Same mechanics as argocd-application.yaml: Git -> Argo CD -> cluster,
+# auto-sync, prune, self-heal.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitops-demo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Ridaa10394/DevOps.git
+    targetRevision: main
+    path: 14-helm/my-web-chart
+    helm:
+      releaseName: gitops-demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: final-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

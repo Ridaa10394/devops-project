@@ -1,0 +1,2 @@
+$ actionlint .github/workflows/final-project.yml
+exit code: 0

@@ -1,0 +1,90 @@
+
+$ helm upgrade --install stocksense helm/stocksense -n final-app -f helm/stocksense/values-dev.yaml --wait --timeout 8m
+Release "stocksense" does not exist. Installing it now.
+NAME: stocksense
+LAST DEPLOYED: Wed Oct  7 18:07:21 2026
+NAMESPACE: final-app
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+NOTES:
+StockSense 1.0.0 deployed as release "stocksense" in namespace "final-app".
+
+  kubectl -n final-app get pods,svc,ingress,hpa
+App:  http://stocksense.localhost/          API: http://stocksense.localhost/api/items
+Backend directly:
+  kubectl -n final-app port-forward svc/stocksense-backend 8000:8000
+  curl localhost:8000/health ; curl localhost:8000/metrics
+Run the smoke tests:
+  helm test stocksense -n final-app
+
+$ helm list -n final-app
+NAME      	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART           	APP VERSION
+stocksense	final-app	1       	2026-10-07 18:07:21.214581 +0530 IST	deployed	stocksense-1.0.0	1.0.0      
+
+$ kubectl -n final-app get deploy,sts,pods,svc,ingress,hpa,pvc,configmap,secret,servicemonitor,prometheusrule
+NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/stocksense-backend    2/2     2            2           20s
+deployment.apps/stocksense-frontend   2/2     2            2           20s
+
+NAME                                   READY   AGE
+statefulset.apps/stocksense-postgres   1/1     20s
+
+NAME                                       READY   STATUS    RESTARTS   AGE
+pod/stocksense-backend-7cc46d7f4f-4bc9z    1/1     Running   0          20s
+pod/stocksense-backend-7cc46d7f4f-gz9ht    1/1     Running   0          20s
+pod/stocksense-frontend-6d757df4c6-ht9vj   1/1     Running   0          20s
+pod/stocksense-frontend-6d757df4c6-x96tc   1/1     Running   0          20s
+pod/stocksense-postgres-0                  1/1     Running   0          20s
+
+NAME                          TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/stocksense-backend    ClusterIP   10.110.120.203   <none>        8000/TCP   20s
+service/stocksense-frontend   ClusterIP   10.99.238.137    <none>        80/TCP     20s
+service/stocksense-postgres   ClusterIP   None             <none>        5432/TCP   20s
+
+NAME                                   CLASS   HOSTS                  ADDRESS        PORTS   AGE
+ingress.networking.k8s.io/stocksense   nginx   stocksense.localhost   192.168.49.2   80      20s
+
+NAME                                                      REFERENCE                        TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/stocksense-backend    Deployment/stocksense-backend    cpu: <unknown>/60%   2         5         2          20s
+horizontalpodautoscaler.autoscaling/stocksense-frontend   Deployment/stocksense-frontend   cpu: <unknown>/70%   2         4         2          20s
+
+NAME                                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/data-stocksense-postgres-0   Bound    pvc-c75bf996-e3e5-4991-b16b-affb486867ad   1Gi        RWO            standard       <unset>                 20s
+
+NAME                             DATA   AGE
+configmap/kube-root-ca.crt       1      12m
+configmap/stocksense-config      5      20s
+configmap/stocksense-dashboard   1      20s
+
+NAME                                      TYPE                 DATA   AGE
+secret/sh.helm.release.v1.stocksense.v1   helm.sh/release.v1   1      20s
+secret/stocksense-db                      Opaque               2      20s
+
+NAME                                                      AGE
+servicemonitor.monitoring.coreos.com/stocksense-backend   20s
+
+NAME                                                     AGE
+prometheusrule.monitoring.coreos.com/stocksense-alerts   20s
+
+$ helm test stocksense -n final-app --logs
+NAME: stocksense
+LAST DEPLOYED: Wed Oct  7 18:07:21 2026
+NAMESPACE: final-app
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE:     stocksense-smoke-test
+Last Started:   Wed Oct  7 18:07:41 2026
+Last Completed: Wed Oct  7 18:07:44 2026
+Phase:          Succeeded
+
+POD LOGS: stocksense-smoke-test (smoke)
+200 http://stocksense-backend:8000/health
+200 http://stocksense-backend:8000/ready
+200 http://stocksense-backend:8000/api/items
+200 http://stocksense-backend:8000/metrics
+200 http://stocksense-frontend/
+200 http://stocksense-frontend/api/items/stats
+smoke test passed
+

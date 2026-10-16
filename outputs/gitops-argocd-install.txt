@@ -1,0 +1,22 @@
+$ helm upgrade --install argocd argo/argo-cd --version 10.10.3 -n argocd --create-namespace -f gitops/argocd-values.yaml --wait --timeout 15m
+Release "argocd" does not exist. Installing it now.
+NAME: argocd
+LAST DEPLOYED: Tue Oct 13 16:18:17 2026
+NAMESPACE: argocd
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+In order to access the server UI you have the following options:
+
+1. kubectl port-forward service/argocd-server -n argocd 8080:443
+
+$ kubectl -n argocd get pods
+NAME                                                READY   STATUS      RESTARTS   AGE
+argocd-application-controller-0                     1/1     Running     0          43s
+argocd-applicationset-controller-775887f484-brxhw   1/1     Running     0          43s
+argocd-redis-5fcb87d6fd-cmgvb                       1/1     Running     0          43s
+argocd-redis-secret-init-8tdpt                      0/1     Completed   0          10m
+argocd-repo-server-768584dc57-8t4hf                 1/1     Running     0          43s
+argocd-server-796b55d587-r7q2z                      1/1     Running     0          43s

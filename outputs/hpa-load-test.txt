@@ -1,0 +1,71 @@
+$ WORKERS=8 DURATION=240 ./scripts/load-test.sh
+load: 8 workers -> http://stocksense-backend:8000/api/items/stats for 240s (namespace final-app)
+pod/stocksense-load created
+running... (kubectl -n final-app logs -f stocksense-load to follow, it deletes itself only when you delete it)
+
+# kubectl -n final-app get hpa stocksense-backend, sampled every 20s
+18:08:30  stocksense-backend   Deployment/stocksense-backend   cpu: <unknown>/60%   2     5     2     69s
+18:08:50  stocksense-backend   Deployment/stocksense-backend   cpu: <unknown>/60%   2     5     2     89s
+18:09:10  stocksense-backend   Deployment/stocksense-backend   cpu: 203%/60%   2     5     2     109s
+18:09:30  stocksense-backend   Deployment/stocksense-backend   cpu: 203%/60%   2     5     5     2m9s
+18:09:50  stocksense-backend   Deployment/stocksense-backend   cpu: 203%/60%   2     5     5     2m29s
+18:10:10  stocksense-backend   Deployment/stocksense-backend   cpu: 330%/60%   2     5     5     2m49s
+18:10:30  stocksense-backend   Deployment/stocksense-backend   cpu: 330%/60%   2     5     5     3m10s
+18:10:51  stocksense-backend   Deployment/stocksense-backend   cpu: 330%/60%   2     5     5     3m30s
+18:11:11  stocksense-backend   Deployment/stocksense-backend   cpu: 284%/60%   2     5     5     3m50s
+18:11:31  stocksense-backend   Deployment/stocksense-backend   cpu: 284%/60%   2     5     5     4m10s
+18:11:51  stocksense-backend   Deployment/stocksense-backend   cpu: 284%/60%   2     5     5     4m30s
+18:12:11  stocksense-backend   Deployment/stocksense-backend   cpu: 284%/60%   2     5     5     4m51s
+18:12:32  stocksense-backend   Deployment/stocksense-backend   cpu: 207%/60%   2     5     5     5m11s
+18:12:52  stocksense-backend   Deployment/stocksense-backend   cpu: 207%/60%   2     5     5     5m31s
+18:13:12  stocksense-backend   Deployment/stocksense-backend   cpu: 5%/60%   2     5     5     5m51s
+18:13:32  stocksense-backend   Deployment/stocksense-backend   cpu: 5%/60%   2     5     5     6m15s
+18:13:56  stocksense-backend   Deployment/stocksense-backend   cpu: 5%/60%   2     5     5     6m36s
+18:14:17  stocksense-backend   Deployment/stocksense-backend   cpu: 2%/60%   2     5     2     6m58s
+18:14:39  stocksense-backend   Deployment/stocksense-backend   cpu: 2%/60%   2     5     2     7m18s
+18:14:59  stocksense-backend   Deployment/stocksense-backend   cpu: 2%/60%   2     5     2     7m39s
+18:15:20  Error from server (Timeout): the server was unable to return a response in the time allotted ...
+
+# ^ at 18:15 the shared minikube API server stopped answering for ~2 minutes (node CPU was
+#   pegged - mostly by Grafana's startup, see troubleshooting scenario 7). The scale-up AND the
+#   scale-down back to 2 had already happened by then. Re-ran the last commands once it recovered:
+
+$ kubectl -n final-app logs stocksense-load
+worker 8 sent 9174 requests
+worker 1 sent 9102 requests
+worker 6 sent 9217 requests
+worker 3 sent 9146 requests
+worker 7 sent 9211 requests
+worker 5 sent 9223 requests
+worker 2 sent 9164 requests
+worker 4 sent 9175 requests
+load finished
+
+$ kubectl -n final-app describe hpa stocksense-backend | sed -n "/Events:/,$p"
+Events:
+  Type     Reason                        Age                    From                       Message
+  ----     ------                        ----                   ----                       -------
+  Normal   SuccessfulRescale             12m                    horizontal-pod-autoscaler  New size: 2; reason: Current number of replicas below Spec.MinReplicas
+  Warning  FailedComputeMetricsReplicas  12m (x2 over 12m)      horizontal-pod-autoscaler  invalid metrics (1 invalid out of 1), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+  Warning  FailedGetResourceMetric       11m (x4 over 11m)      horizontal-pod-autoscaler  failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+  Warning  FailedComputeMetricsReplicas  11m (x4 over 11m)      horizontal-pod-autoscaler  invalid metrics (1 invalid out of 1), first error is: failed to get cpu resource metric value: failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+  Normal   SuccessfulRescale             10m                    horizontal-pod-autoscaler  New size: 5; reason: cpu resource utilization (percentage of request) above target
+  Normal   SuccessfulRescale             6m                     horizontal-pod-autoscaler  New size: 2; reason: All metrics below target
+  Warning  FailedUpdateStatus            3m42s                  horizontal-pod-autoscaler  etcdserver: request timed out
+  Warning  FailedGetScale                2m59s                  horizontal-pod-autoscaler  Get "https://192.168.49.2:8443/apis/apps/v1/namespaces/final-app/deployments/stocksense-backend/scale": dial tcp 192.168.49.2:8443: connect: connection refused - error from a previous attempt: unexpected EOF
+  Warning  FailedUpdateStatus            2m42s (x4 over 2m59s)  horizontal-pod-autoscaler  Put "https://192.168.49.2:8443/apis/autoscaling/v2/namespaces/final-app/horizontalpodautoscalers/stocksense-backend/status": dial tcp 192.168.49.2:8443: connect: connection refused
+  Warning  FailedGetScale                2m42s (x3 over 2m59s)  horizontal-pod-autoscaler  Get "https://192.168.49.2:8443/api": dial tcp 192.168.49.2:8443: connect: connection refused
+  Warning  FailedGetScale                2m15s                  horizontal-pod-autoscaler  Get "https://192.168.49.2:8443/api": net/http: TLS handshake timeout
+  Warning  FailedUpdateStatus            2m10s                  horizontal-pod-autoscaler  horizontalpodautoscalers.autoscaling "stocksense-backend" is forbidden: User "system:serviceaccount:kube-system:horizontal-pod-autoscaler" cannot update resource "horizontalpodautoscalers/status" in API group "autoscaling" in the namespace "final-app"
+  Warning  FailedGetScale                2m10s                  horizontal-pod-autoscaler  unknown
+  Warning  FailedUpdateStatus            2m10s                  horizontal-pod-autoscaler  Operation cannot be fulfilled on horizontalpodautoscalers.autoscaling "stocksense-backend": the object has been modified; please apply your changes to the latest version and try again
+  Warning  FailedGetResourceMetric       117s (x3 over 12m)     horizontal-pod-autoscaler  failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+
+$ kubectl -n final-app get hpa,deploy
+NAME                                                      REFERENCE                        TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/stocksense-backend    Deployment/stocksense-backend    cpu: 4%/60%   2         5         2          12m
+horizontalpodautoscaler.autoscaling/stocksense-frontend   Deployment/stocksense-frontend   cpu: 4%/70%   2         4         2          12m
+
+NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/stocksense-backend    2/2     2            2           12m
+deployment.apps/stocksense-frontend   2/2     2            2           12m

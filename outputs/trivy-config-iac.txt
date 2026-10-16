@@ -1,0 +1,108 @@
+$ trivy config --severity HIGH,CRITICAL --skip-dirs terraform/.terraform --skip-dirs outputs .
+
+Report Summary
+
+┌──────────────────────────────────────────────┬────────────┬───────────────────┐
+│                    Target                    │    Type    │ Misconfigurations │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ application/backend/Dockerfile               │ dockerfile │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ application/frontend/Dockerfile              │ dockerfile │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/backend.yaml       │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/configmap.yaml     │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/frontend.yaml      │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/hpa.yaml           │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/ingress.yaml       │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/postgres.yaml      │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/stocksense/templates/secret.yaml        │    helm    │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/00-namespace.yaml                 │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/01-configmap.yaml                 │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/02-secret.yaml                    │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/03-postgres.yaml                  │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/04-backend.yaml                   │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/05-frontend.yaml                  │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/06-ingress.yaml                   │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/07-hpa.yaml                       │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ monitoring/prometheus-rules.yaml             │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ monitoring/servicemonitor.yaml               │ kubernetes │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform                                    │ terraform  │         0         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform-aws-modules/eks/aws/main.tf        │ terraform  │         1         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform-aws-modules/eks/aws/node_groups.tf │ terraform  │         1         │
+├──────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform-aws-modules/vpc/aws/main.tf        │ terraform  │         0         │
+└──────────────────────────────────────────────┴────────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+terraform-aws-modules/eks/aws/main.tf (terraform)
+=================================================
+Tests: 1 (SUCCESSES: 0, FAILURES: 1)
+Failures: 1 (HIGH: 0, CRITICAL: 1)
+
+AWS-0040 (CRITICAL): Public cluster access is enabled.
+════════════════════════════════════════
+EKS clusters are available publicly by default, this should be explicitly disabled in the vpc_config of the EKS cluster resource.
+
+
+See https://avd.aquasec.com/misconfig/aws-0040
+────────────────────────────────────────
+ terraform-aws-modules/eks/aws/main.tf:83
+   via terraform-aws-modules/eks/aws/main.tf:78-85 (vpc_config)
+    via terraform-aws-modules/eks/aws/main.tf:36-243 (aws_eks_cluster.this[0])
+     via terraform/main.tf:45-87 (module.eks)
+────────────────────────────────────────
+  36   resource "aws_eks_cluster" "this" {
+  ..   
+  83 [     endpoint_public_access    = var.endpoint_public_access
+ ...   
+ 243   }
+────────────────────────────────────────
+
+
+
+terraform-aws-modules/eks/aws/node_groups.tf (terraform)
+========================================================
+Tests: 1 (SUCCESSES: 0, FAILURES: 1)
+Failures: 1 (HIGH: 0, CRITICAL: 1)
+
+AWS-0104 (CRITICAL): Security group rule allows unrestricted egress to any IP address.
+════════════════════════════════════════
+Opening up ports to connect out to the public internet is generally to be avoided. You should restrict access to IP addresses or ranges that are explicitly required where possible.
+
+
+See https://avd.aquasec.com/misconfig/aws-0104
+────────────────────────────────────────
+ terraform-aws-modules/eks/aws/node_groups.tf:218
+   via terraform-aws-modules/eks/aws/node_groups.tf:203-223 (aws_security_group_rule.node["egress_all"])
+    via terraform/main.tf:45-87 (module.eks)
+────────────────────────────────────────
+ 203   resource "aws_security_group_rule" "node" {
+ ...   
+ 218 [   cidr_blocks              = try(each.value.cidr_blocks, null)
+ ...   
+ 223   }
+────────────────────────────────────────
+
+

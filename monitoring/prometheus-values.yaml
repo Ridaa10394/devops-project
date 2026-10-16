@@ -1,0 +1,91 @@
+# kube-prometheus-stack values for the final project (lean, minikube-friendly).
+#
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install final-kps prometheus-community/kube-prometheus-stack \
+#     -n final-monitoring --create-namespace -f monitoring/prometheus-values.yaml
+#
+# Prometheus Operator + Prometheus + Grafana + kube-state-metrics.
+# Alertmanager / node-exporter / control-plane scrapes are off to keep a
+# shared 4 CPU / 6 GB minikube happy; on EKS turn them back on (see bottom).
+
+fullnameOverride: final-kps
+
+# Pick up ServiceMonitors / PrometheusRules from EVERY namespace, not just the
+# ones carrying this release's label. (Without this, our ServiceMonitor in
+# final-app is silently ignored - classic "target not showing up" problem.)
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 2d
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 768Mi}
+
+grafana:
+  enabled: true
+  # admin password is generated into the final-kps-grafana Secret; read it with
+  #   kubectl -n final-monitoring get secret final-kps-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL     # our dashboard ConfigMap lives in final-app
+  resources:
+    requests: {cpu: 100m, memory: 192Mi}
+    # CPU cap added after Grafana used ~3.8 cores and starved the shared
+    # minikube API server for ~2 minutes (troubleshooting scenario 7, part 2)
+    limits: {cpu: "1", memory: 768Mi}
+  # Grafana 13 takes several minutes to boot on a busy 4-CPU minikube (its
+  # embedded apiserver registers every dashboard API version). The chart's
+  # default liveness probe (60s delay) killed it mid-start in a loop - see
+  # troubleshooting/README.md scenario 7. Give it 5 minutes before liveness counts.
+  livenessProbe:
+    httpGet: {path: /api/health, port: 3000}
+    initialDelaySeconds: 300
+    timeoutSeconds: 30
+    periodSeconds: 10
+    failureThreshold: 10
+  readinessProbe:
+    httpGet: {path: /api/health, port: 3000}
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+kube-state-metrics:
+  enabled: true                # HPA replica + pod restart panels/alerts need it
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+  # the validating webhook needs an extra cert-generation Job + image; not worth
+  # it on a laptop cluster (rules are still validated by `helm lint`/promtool in CI)
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+
+# the ~20 stock Kubernetes dashboards make Grafana's start even slower; our own
+# StockSense dashboard arrives via the sidecar instead
+defaultDashboardsEnabled: false
+
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
+
+# minikube's control-plane components don't expose metrics to pods - avoid "down" targets
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+
+# On EKS: alertmanager.enabled=true, nodeExporter.enabled=true,
+# prometheus-node-exporter.enabled=true, retention: 15d, storageSpec with gp3.

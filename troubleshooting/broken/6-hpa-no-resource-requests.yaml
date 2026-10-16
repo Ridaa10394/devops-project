@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stocksense-backend
+  namespace: final-app
+  labels: {app: stocksense-backend, app.kubernetes.io/part-of: stocksense}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0} # never drop below 2 ready pods during a rollout
+  selector:
+    matchLabels: {app: stocksense-backend}
+  template:
+    metadata:
+      labels: {app: stocksense-backend, app.kubernetes.io/part-of: stocksense}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        # wait for postgres, then run Alembic once per rollout (advisory lock in
+        # alembic/env.py stops the two replicas from migrating at the same time)
+        - name: migrate
+          image: stocksense-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "python -m app.wait_for_db && alembic upgrade head"]
+          envFrom:
+            - configMapRef: {name: stocksense-config}
+            - secretRef: {name: stocksense-db}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+      containers:
+        - name: backend
+          image: stocksense-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8000}
+          env:
+            - {name: RUN_MIGRATIONS, value: "false"} # the initContainer already did it
+          envFrom:
+            - configMapRef: {name: stocksense-config}
+            - secretRef: {name: stocksense-db}
+          startupProbe: # give a slow first start up to 60s before liveness kicks in
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe: # out of the Service while the DB is unreachable
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe: # restart only if the process itself hangs
+            httpGet: {path: /health, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # BROKEN: resources block removed - no cpu request, so the HPA has nothing to compute a percentage against
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}

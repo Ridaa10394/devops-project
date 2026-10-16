@@ -1,0 +1,67 @@
+########## BREAK ##########
+
+$ kubectl apply -f troubleshooting/broken/4-missing-configmap-key.yaml
+configmap/stocksense-config configured
+
+$ kubectl -n final-app rollout restart deploy/stocksense-frontend
+deployment.apps/stocksense-frontend restarted
+
+########## INVESTIGATE ##########
+
+$ kubectl -n final-app get pods -l app=stocksense-frontend
+NAME                                   READY   STATUS                       RESTARTS   AGE
+stocksense-frontend-6b5c74ccc8-7d4r4   1/1     Running                      0          6m45s
+stocksense-frontend-6b5c74ccc8-9b6cx   1/1     Running                      0          6m45s
+stocksense-frontend-fd4f66768-4bdx5    0/1     CreateContainerConfigError   0          20s
+
+$ kubectl -n final-app describe pod stocksense-frontend-fd4f66768-4bdx5 | sed -n '/Containers:/,/Ready:/p' | grep -E 'State|Reason|Ready'
+    State:          Waiting
+      Reason:       CreateContainerConfigError
+    Ready:          False
+
+$ kubectl -n final-app get events --field-selector involvedObject.name=stocksense-frontend-fd4f66768-4bdx5 | tail -4
+LAST SEEN   TYPE      REASON      OBJECT                                    MESSAGE
+20s         Normal    Scheduled   pod/stocksense-frontend-fd4f66768-4bdx5   Successfully assigned final-app/stocksense-frontend-fd4f66768-4bdx5 to minikube
+8s          Normal    Pulled      pod/stocksense-frontend-fd4f66768-4bdx5   Container image "stocksense-frontend:1.0.0" already present on machine and can be accessed by the pod
+8s          Warning   Failed      pod/stocksense-frontend-fd4f66768-4bdx5   Error: couldn't find key BACKEND_URL in ConfigMap final-app/stocksense-config
+
+$ kubectl -n final-app logs stocksense-frontend-fd4f66768-4bdx5
+Error from server (BadRequest): container "frontend" in pod "stocksense-frontend-fd4f66768-4bdx5" is waiting to start: CreateContainerConfigError
+
+$ kubectl -n final-app get deploy stocksense-frontend -o jsonpath='{.spec.template.spec.containers[0].env}{"
+"}'
+[{"name":"BACKEND_URL","valueFrom":{"configMapKeyRef":{"key":"BACKEND_URL","name":"stocksense-config"}}}]
+
+$ kubectl -n final-app get configmap stocksense-config -o jsonpath='{.data}{"
+"}'
+{"APP_ENV":"kubernetes","BACKEND_ADDR":"http://stocksense-backend:8000","DB_HOST":"stocksense-postgres","DB_NAME":"stocksense","DB_PORT":"5432"}
+
+########## FIX ##########
+
+$ kubectl apply -f troubleshooting/fixed/4-missing-configmap-key.yaml
+configmap/stocksense-config configured
+
+$ kubectl -n final-app rollout status deploy/stocksense-frontend --timeout=180s
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-frontend" rollout to finish: 1 old replicas are pending termination...
+deployment "stocksense-frontend" successfully rolled out
+
+########## VERIFY ##########
+
+$ kubectl -n final-app get pods -l app=stocksense-frontend
+NAME                                   READY   STATUS        RESTARTS   AGE
+stocksense-frontend-6b5c74ccc8-7d4r4   1/1     Terminating   0          6m52s
+stocksense-frontend-fd4f66768-4bdx5    1/1     Running       0          27s
+stocksense-frontend-fd4f66768-57pg4    1/1     Running       0          1s
+
+$ curl -s -w '  HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items/stats
+{"total_items":7,"total_units":246,"low_stock":1,"out_of_stock":1,"inventory_value":"3081.18","categories":5}  HTTP 200
+
+$ curl -s -o /dev/null -w 'GET / -> HTTP %{http_code}
+' http://stocksense.localhost:18210/
+GET / -> HTTP 200

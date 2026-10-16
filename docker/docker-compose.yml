@@ -1,0 +1,59 @@
+# StockSense - full local stack (postgres + FastAPI + React/nginx)
+# Run from this folder:   docker compose up -d --build
+# Then open:              http://localhost:3000  (UI)   http://localhost:8000/docs (API)
+name: stocksense
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stocksense}
+      POSTGRES_USER: ${POSTGRES_USER:-stocksense}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stocksense-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend-net]
+
+  backend:
+    build:
+      context: ../application/backend
+    image: stocksense-backend:local
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-stocksense}
+      DB_USER: ${POSTGRES_USER:-stocksense}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-stocksense-local-only}
+      APP_ENV: docker-compose
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    networks: [backend-net, frontend-net]
+
+  frontend:
+    build:
+      context: ../application/frontend
+    image: stocksense-frontend:local
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:8080"
+    networks: [frontend-net]
+
+volumes:
+  postgres-data:
+
+# postgres is only on backend-net, so the frontend container cannot reach the DB directly
+networks:
+  frontend-net:
+  backend-net:

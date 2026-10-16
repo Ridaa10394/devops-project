@@ -1,0 +1,24 @@
+# Trivy config shared by `trivy fs` (SCA + IaC misconfig) and `trivy image`.
+# Usage (from the repo root):
+#   trivy fs    --config security/trivy.yaml .
+#   trivy image --config security/trivy.yaml stocksense-backend:local
+severity:
+  - UNKNOWN
+  - LOW
+  - MEDIUM
+  - HIGH
+  - CRITICAL
+scan:
+  scanners:
+    - vuln
+    - secret
+  skip-dirs:
+    - application/frontend/node_modules
+    - application/backend/.venv
+    - terraform/.terraform
+vulnerability:
+  ignorefile: security/.trivyignore
+  # Show unfixed CVEs too; the gate (gate-policy.toml) decides that only
+  # fixable HIGH/CRITICAL ones block the release.
+  ignore-unfixed: false
+timeout: 15m

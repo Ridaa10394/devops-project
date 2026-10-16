@@ -1,0 +1,12 @@
+StockSense {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+  kubectl -n {{ .Release.Namespace }} get pods,svc,ingress,hpa
+
+{{- if .Values.ingress.enabled }}
+App:  http://{{ .Values.ingress.host }}/          API: http://{{ .Values.ingress.host }}/api/items
+{{- end }}
+Backend directly:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "stocksense.fullname" . }}-backend 8000:{{ .Values.backend.port }}
+  curl localhost:8000/health ; curl localhost:8000/metrics
+Run the smoke tests:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

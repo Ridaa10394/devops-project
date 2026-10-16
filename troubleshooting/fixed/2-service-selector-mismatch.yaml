@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stocksense-frontend
+  namespace: final-app
+  labels: {app: stocksense-frontend, app.kubernetes.io/part-of: stocksense}
+spec:
+  type: ClusterIP
+  selector: {app: stocksense-frontend}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

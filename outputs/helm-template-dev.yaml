@@ -1,0 +1,1315 @@
+---
+# Source: stocksense/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stocksense-db
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+stringData:
+  DB_USER: "stocksense"
+  DB_PASSWORD: "local-minikube-only"
+
+---
+# Source: stocksense/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stocksense-config
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  APP_ENV: "minikube"
+  DB_HOST: "stocksense-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "stocksense"
+  BACKEND_URL: "http://stocksense-backend:8000"
+
+---
+# Source: stocksense/templates/grafana-dashboard.yaml
+# Grafana's dashboard sidecar (kube-prometheus-stack) imports every ConfigMap
+# labelled grafana_dashboard=1. Source of truth: monitoring/grafana-dashboard.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stocksense-dashboard
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    grafana_dashboard: "1"
+data:
+  stocksense-dashboard.json: |-
+    {
+      "uid": "stocksense-overview",
+      "title": "StockSense - Application Overview",
+      "tags": [
+        "stocksense",
+        "final-project"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "description": "RED metrics (rate, errors, duration) + business metrics for the StockSense FastAPI backend. Ridaa Mirza 24BCS10394",
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {
+              "text": "Prometheus",
+              "value": "prometheus"
+            },
+            "hide": 0,
+            "label": "Data source"
+          },
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "query": "label_values(stocksense_low_stock_items, namespace)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "label": "Namespace"
+          },
+          {
+            "name": "job",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "query": "label_values(stocksense_low_stock_items{namespace=~\"$namespace\"}, job)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "label": "Job"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Backend targets UP",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum(up{namespace=~\"$namespace\",job=~\"$job\"})"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Requests / sec",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum(rate(http_requests_total{namespace=~\"$namespace\",job=~\"$job\"}[2m]))"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "5xx error rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.01
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.05
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "(sum(rate(http_requests_total{namespace=~\"$namespace\",job=~\"$job\",status=\"5xx\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_total{namespace=~\"$namespace\",job=~\"$job\"}[5m])), 1e-9)"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "p95 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.3
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=~\"$namespace\",job=~\"$job\"}[5m])))"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Low / out-of-stock items",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "max(stocksense_low_stock_items{namespace=~\"$namespace\",job=~\"$job\"})"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Backend pods",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "background",
+            "graphMode": "area"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "count(up{namespace=~\"$namespace\",job=~\"$job\"} == 1)"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "HTTP requests per second by endpoint",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum by (handler, method) (rate(http_requests_total{namespace=~\"$namespace\",job=~\"$job\"}[2m]))",
+              "legendFormat": "{{method}} {{handler}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Responses by status class",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 4,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum by (status) (rate(http_requests_total{namespace=~\"$namespace\",job=~\"$job\"}[2m]))",
+              "legendFormat": "{{status}}"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Latency percentiles (all endpoints)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 12,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=~\"$namespace\",job=~\"$job\"}[5m])))",
+              "legendFormat": "p50"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=~\"$namespace\",job=~\"$job\"}[5m])))",
+              "legendFormat": "p95"
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=~\"$namespace\",job=~\"$job\"}[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Inventory changes per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 12,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum by (action) (rate(stocksense_inventory_changes_total{namespace=~\"$namespace\",job=~\"$job\"}[5m])) * 60",
+              "legendFormat": "{{action}}"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Backend CPU per pod (cores) vs request",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 20,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\".*backend.*\",container=\"backend\"}[2m]))",
+              "legendFormat": "{{pod}}"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "max(kube_pod_container_resource_requests{namespace=~\"$namespace\",container=\"backend\",resource=\"cpu\"})",
+              "legendFormat": "cpu request"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "HPA replicas (backend)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 20,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "max by (horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_current_replicas{namespace=~\"$namespace\"})",
+              "legendFormat": "current {{horizontalpodautoscaler}}"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "max by (horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_desired_replicas{namespace=~\"$namespace\"})",
+              "legendFormat": "desired {{horizontalpodautoscaler}}"
+            }
+          ]
+        }
+      ],
+      "annotations": {
+        "list": []
+      },
+      "editable": true
+    }
+    
+
+---
+# Source: stocksense/templates/backend.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stocksense-backend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-backend
+    app.kubernetes.io/instance: stocksense
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: stocksense-backend
+    app.kubernetes.io/instance: stocksense
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+
+---
+# Source: stocksense/templates/frontend.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stocksense-frontend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-frontend
+    app.kubernetes.io/instance: stocksense
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: stocksense-frontend
+    app.kubernetes.io/instance: stocksense
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+# Source: stocksense/templates/postgres.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stocksense-postgres
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-postgres
+    app.kubernetes.io/instance: stocksense
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: stocksense-postgres
+    app.kubernetes.io/instance: stocksense
+  ports:
+    - {name: postgres, port: 5432, targetPort: postgres}
+
+---
+# Source: stocksense/templates/backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stocksense-backend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-backend
+    app.kubernetes.io/instance: stocksense
+spec:
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stocksense-backend
+      app.kubernetes.io/instance: stocksense
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: stocksense-1.0.0
+        app.kubernetes.io/part-of: stocksense
+        app.kubernetes.io/instance: stocksense
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: stocksense-backend
+        app.kubernetes.io/instance: stocksense
+      annotations:
+        # roll the pods when config or credentials change
+        checksum/config: ab619ee0e4c26699f604dbc02c668e772e0270d797008193b23d3e603536b068
+        checksum/secret: d3b6627e5f672316cca7d6563966851d9a9506763b6610fac30893abf1cdd589
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: migrate
+          image: stocksense-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "python -m app.wait_for_db && alembic upgrade head"]
+          envFrom:
+            - configMapRef: {name: stocksense-config}
+            - secretRef: {name: stocksense-db}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+      containers:
+        - name: backend
+          image: stocksense-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8000}
+          env:
+            - {name: RUN_MIGRATIONS, value: "false"}
+          envFrom:
+            - configMapRef: {name: stocksense-config}
+            - secretRef: {name: stocksense-db}
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+
+---
+# Source: stocksense/templates/frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stocksense-frontend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-frontend
+    app.kubernetes.io/instance: stocksense
+spec:
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stocksense-frontend
+      app.kubernetes.io/instance: stocksense
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: stocksense-1.0.0
+        app.kubernetes.io/part-of: stocksense
+        app.kubernetes.io/instance: stocksense
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: stocksense-frontend
+        app.kubernetes.io/instance: stocksense
+      annotations:
+        checksum/config: ab619ee0e4c26699f604dbc02c668e772e0270d797008193b23d3e603536b068
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: stocksense-frontend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: BACKEND_URL
+              valueFrom: {configMapKeyRef: {name: stocksense-config, key: BACKEND_URL}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 25m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: conf, mountPath: /etc/nginx/conf.d}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+        - {name: conf, emptyDir: {}}
+
+---
+# Source: stocksense/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stocksense-backend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stocksense-backend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60
+
+---
+# Source: stocksense/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stocksense-frontend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stocksense-frontend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60
+
+---
+# Source: stocksense/templates/postgres.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stocksense-postgres
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: stocksense-postgres
+    app.kubernetes.io/instance: stocksense
+spec:
+  serviceName: stocksense-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stocksense-postgres
+      app.kubernetes.io/instance: stocksense
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: stocksense-1.0.0
+        app.kubernetes.io/part-of: stocksense
+        app.kubernetes.io/instance: stocksense
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: stocksense-postgres
+        app.kubernetes.io/instance: stocksense
+      annotations:
+        checksum/secret: d3b6627e5f672316cca7d6563966851d9a9506763b6610fac30893abf1cdd589
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: postgres, containerPort: 5432}
+          env:
+            - name: POSTGRES_DB
+              value: "stocksense"
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: stocksense-db, key: DB_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: stocksense-db, key: DB_PASSWORD}}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec: {command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: run, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+
+---
+# Source: stocksense/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stocksense
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "stocksense.localhost"
+      http:
+        paths:
+          # /api -> FastAPI. The service name/port are derived from the same
+          # helpers as the Service itself, so they can never drift apart.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: stocksense-backend
+                port: {number: 8000}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stocksense-frontend
+                port: {number: 80}
+
+---
+# Source: stocksense/templates/prometheusrule.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stocksense-alerts
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: stocksense.rules
+      rules:
+        - alert: StockSenseBackendDown
+          expr: sum(up{namespace="final-app", job=~".*backend.*"}) < 1
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: "No StockSense backend target is up"
+        - alert: StockSenseHighErrorRate
+          expr: sum(rate(http_requests_total{namespace="final-app", status="5xx"}[5m])) / clamp_min(sum(rate(http_requests_total{namespace="final-app"}[5m])), 1e-9) > 0.05
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: "More than 5% of API requests are failing"
+        - alert: StockSenseSlowRequests
+          expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace="final-app"}[5m]))) > 0.5
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: "API p95 latency above 500ms"
+        - alert: StockSensePodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="final-app"}[15m]) > 2
+          labels: {severity: warning}
+          annotations:
+            summary: "{{ $labels.pod }} restarted more than twice in 15 minutes"
+        - alert: StockSenseManyLowStockItems
+          expr: max(stocksense_low_stock_items{namespace="final-app"}) >= 5
+          for: 15m
+          labels: {severity: info}
+          annotations:
+            summary: "5 or more items are at/below their reorder level"
+
+---
+# Source: stocksense/templates/servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stocksense-backend
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stocksense-backend
+      app.kubernetes.io/instance: stocksense
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+# Source: stocksense/templates/tests/test-smoke.yaml
+# `helm test <release>` - checks the API, the readiness (DB) endpoint and the
+# frontend -> backend proxy from inside the cluster.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stocksense-smoke-test
+  labels:
+    helm.sh/chart: stocksense-1.0.0
+    app.kubernetes.io/part-of: stocksense
+    app.kubernetes.io/instance: stocksense
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: smoke
+      image: stocksense-backend:1.0.0
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+      command:
+        - python
+        - -c
+        - |
+          import json, urllib.request
+          be = "http://stocksense-backend:8000"
+          fe = "http://stocksense-frontend"
+          def get(url):
+              with urllib.request.urlopen(url, timeout=5) as r:
+                  print(r.status, url)
+                  return r.read()
+          assert json.loads(get(be + "/health"))["status"] == "UP"
+          assert json.loads(get(be + "/ready"))["status"] == "READY"
+          assert isinstance(json.loads(get(be + "/api/items")), list)
+          assert b"http_requests_total" in get(be + "/metrics")
+          assert b"<div id=\"root\">" in get(fe + "/")
+          assert "total_items" in json.loads(get(fe + "/api/items/stats"))
+          print("smoke test passed")
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+

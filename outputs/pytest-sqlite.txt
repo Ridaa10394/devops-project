@@ -1,0 +1,50 @@
+$ ruff check . && ruff format --check .
+All checks passed!
+16 files already formatted
+
+$ pytest -v --cov=app --cov-report=term-missing --cov-fail-under=80
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/ridaamahroozmirza/Desktop/AI-Labs/DevOps/final-devops-project/application/backend/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/ridaamahroozmirza/Desktop/AI-Labs/DevOps/final-devops-project/application/backend
+configfile: pytest.ini
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.15.1
+collecting ... collected 19 items
+
+tests/test_health.py::test_health_is_up PASSED                           [  5%]
+tests/test_health.py::test_ready_checks_database PASSED                  [ 10%]
+tests/test_health.py::test_ready_returns_503_when_db_is_down PASSED      [ 15%]
+tests/test_health.py::test_root_reports_service_name PASSED              [ 21%]
+tests/test_health.py::test_metrics_endpoint_is_prometheus_format PASSED  [ 26%]
+tests/test_items.py::test_create_item PASSED                             [ 31%]
+tests/test_items.py::test_create_rejects_duplicate_sku PASSED            [ 36%]
+tests/test_items.py::test_create_validates_payload PASSED                [ 42%]
+tests/test_items.py::test_list_and_get_item PASSED                       [ 47%]
+tests/test_items.py::test_list_filters PASSED                            [ 52%]
+tests/test_items.py::test_get_missing_item_is_404 PASSED                 [ 57%]
+tests/test_items.py::test_update_item PASSED                             [ 63%]
+tests/test_items.py::test_update_missing_item_is_404 PASSED              [ 68%]
+tests/test_items.py::test_adjust_stock PASSED                            [ 73%]
+tests/test_items.py::test_delete_item PASSED                             [ 78%]
+tests/test_items.py::test_stats PASSED                                   [ 84%]
+tests/test_migrations.py::test_alembic_upgrade_and_downgrade PASSED      [ 89%]
+tests/test_wait_for_db.py::test_wait_for_db_succeeds_on_reachable_db PASSED [ 94%]
+tests/test_wait_for_db.py::test_wait_for_db_gives_up PASSED              [100%]
+
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.12.13-final-0 _______________
+
+Name                 Stmts   Miss  Cover   Missing
+--------------------------------------------------
+app/__init__.py          0      0   100%
+app/config.py           19      0   100%
+app/db.py               12      4    67%   15-19
+app/main.py             98      0   100%
+app/models.py           27      0   100%
+app/schemas.py          38      0   100%
+app/wait_for_db.py      21      1    95%   30
+--------------------------------------------------
+TOTAL                  215      5    98%
+Required test coverage of 80% reached. Total coverage: 97.67%
+============================== 19 passed in 0.24s ==============================

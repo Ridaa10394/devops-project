@@ -1,0 +1,14 @@
+{{- if .Values.monitoring.grafanaDashboard.enabled }}
+# Grafana's dashboard sidecar (kube-prometheus-stack) imports every ConfigMap
+# labelled grafana_dashboard=1. Source of truth: monitoring/grafana-dashboard.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "stocksense.fullname" . }}-dashboard
+  labels:
+    {{- include "stocksense.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  stocksense-dashboard.json: |-
+{{ .Files.Get "files/grafana-dashboard.json" | indent 4 }}
+{{- end }}

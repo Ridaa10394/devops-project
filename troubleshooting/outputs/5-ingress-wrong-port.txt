@@ -1,0 +1,65 @@
+########## BREAK ##########
+
+$ kubectl apply -f troubleshooting/broken/5-ingress-wrong-port.yaml
+ingress.networking.k8s.io/stocksense configured
+
+########## INVESTIGATE ##########
+
+$ curl -s -w '
+HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items/stats | tail -3
+</html>
+
+HTTP 503
+
+$ curl -s -o /dev/null -w 'frontend route still fine: HTTP %{http_code}
+' http://stocksense.localhost:18210/
+frontend route still fine: HTTP 200
+
+$ kubectl -n final-app describe ingress stocksense
+Name:             stocksense
+Labels:           app.kubernetes.io/part-of=stocksense
+Namespace:        final-app
+Address:          192.168.49.2
+Ingress Class:    nginx
+Default backend:  <default>
+Rules:
+  Host                  Path  Backends
+  ----                  ----  --------
+  stocksense.localhost  
+                        /api   stocksense-backend:8080 ()
+                        /      stocksense-frontend:80 (10.244.0.125:8080,10.244.0.126:8080)
+Annotations:            nginx.ingress.kubernetes.io/proxy-body-size: 1m
+Events:
+  Type    Reason  Age                From                      Message
+  ----    ------  ----               ----                      -------
+  Normal  Sync    8s (x3 over 7m7s)  nginx-ingress-controller  Scheduled for sync
+
+$ kubectl -n final-app get svc stocksense-backend
+NAME                 TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+stocksense-backend   ClusterIP   10.102.21.69   <none>        8000/TCP   7m7s
+
+$ kubectl -n final-app get endpointslices -l kubernetes.io/service-name=stocksense-backend
+NAME                       ADDRESSTYPE   PORTS   ENDPOINTS                   AGE
+stocksense-backend-kmdxk   IPv4          8000    10.244.0.121,10.244.0.122   7m7s
+
+$ kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --since=60s | grep -E 'stocksense-backend' | tail -3
+127.0.0.1 - - [07/Oct/2026:12:19:04 +0000] "GET /api/items/stats HTTP/1.1" 200 109 "-" "curl/8.7.1" 104 0.040 [final-app-stocksense-backend-8000] [] 10.244.0.122:8000 109 0.040 200 cdd27661fd07e7c62ea849d69c6f3fa1
+127.0.0.1 - - [07/Oct/2026:12:19:19 +0000] "GET /api/items/stats HTTP/1.1" 503 190 "-" "curl/8.7.1" 104 0.000 [final-app-stocksense-backend-8080] [] - - - - e58d59d0c7850241b9c7f83b4ef3b203
+
+########## FIX ##########
+
+$ kubectl apply -f troubleshooting/fixed/5-ingress-wrong-port.yaml
+ingress.networking.k8s.io/stocksense configured
+
+########## VERIFY ##########
+
+$ kubectl -n final-app describe ingress stocksense | grep -A3 'Path  Backends'
+  Host                  Path  Backends
+  ----                  ----  --------
+  stocksense.localhost  
+                        /api   stocksense-backend:8000 (10.244.0.121:8000,10.244.0.122:8000)
+
+$ curl -s -w '  HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items/stats
+{"total_items":7,"total_units":246,"low_stock":1,"out_of_stock":1,"inventory_value":"3081.18","categories":5}  HTTP 200

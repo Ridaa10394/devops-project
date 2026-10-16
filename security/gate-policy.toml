@@ -1,0 +1,25 @@
+# Security gate policy - read by security/gate.py in the "Security Gate" job of
+# .github/workflows/final-project.yml. Every scanner runs in report mode and
+# uploads JSON; this file is the ONE place that decides what blocks a release.
+
+[sast]                        # bandit
+# Block on findings at or above BOTH levels (LOW < MEDIUM < HIGH).
+min_severity   = "MEDIUM"
+min_confidence = "MEDIUM"
+
+[sca]                         # pip-audit (Python) + npm audit (frontend)
+# pip-audit has no severity, so every known vuln in a pinned dep blocks.
+max_vulnerabilities = 0
+# npm audit: block on these severities (prod + dev deps, since dev deps run in the build)
+npm_block_severities = ["high", "critical"]
+allow = []                    # e.g. [{ id = "GHSA-xxxx", reason = "..." }]
+
+[secrets]                     # gitleaks
+max_findings = 0              # any leaked secret blocks, no exceptions
+
+[image]                       # trivy image, one report per image (backend + frontend)
+# Block on HIGH/CRITICAL that already have a fixed version available.
+# Unfixed CVEs in the base OS are reported but cannot be fixed by us;
+# accepted ones go in security/.trivyignore with a justification.
+block_severities = ["HIGH", "CRITICAL"]
+ignore_unfixed   = true

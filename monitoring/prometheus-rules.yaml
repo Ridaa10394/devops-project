@@ -1,0 +1,48 @@
+# Alert rules for StockSense. Loaded by the Prometheus Operator as a
+# PrometheusRule (the Helm chart renders the same rules from
+# helm/stocksense/templates/prometheusrule.yaml when monitoring.prometheusRule.enabled=true).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stocksense-alerts
+  namespace: final-app
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: stocksense.rules
+      rules:
+        - alert: StockSenseBackendDown
+          expr: sum(up{namespace="final-app", job=~".*backend.*"}) < 1
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: "No StockSense backend target is up"
+            description: "Prometheus cannot scrape any backend pod in final-app for 2 minutes."
+        - alert: StockSenseHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="final-app", status="5xx"}[5m]))
+              / clamp_min(sum(rate(http_requests_total{namespace="final-app"}[5m])), 1e-9) > 0.05
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: "More than 5% of API requests are failing"
+        - alert: StockSenseSlowRequests
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{namespace="final-app"}[5m]))) > 0.5
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: "API p95 latency above 500ms"
+        - alert: StockSensePodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="final-app"}[15m]) > 2
+          labels: {severity: warning}
+          annotations:
+            summary: "{{ $labels.pod }} restarted more than twice in 15 minutes"
+        - alert: StockSenseManyLowStockItems
+          expr: max(stocksense_low_stock_items{namespace="final-app"}) >= 5
+          for: 15m
+          labels: {severity: info}
+          annotations:
+            summary: "5 or more items are at/below their reorder level"

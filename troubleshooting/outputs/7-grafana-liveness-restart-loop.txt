@@ -1,0 +1,297 @@
+# Found for real while installing monitoring - not planted. helm --wait timed out after 10 minutes.
+
+########## INVESTIGATE ##########
+
+$ helm -n final-monitoring status final-kps
+NAME: final-kps
+LAST DEPLOYED: Wed Oct  7 17:56:13 2026
+NAMESPACE: final-monitoring
+STATUS: failed
+REVISION: 1
+DESCRIPTION: Release "final-kps" failed: resource Deployment/final-monitoring/final-kps-grafana not ready. status: InProgress, message: Available: 0/1
+context deadline exceeded
+RESOURCES:
+==> v1/ClusterRoleBinding
+NAME                                   ROLE                                        AGE
+final-kps-grafana-clusterrolebinding   ClusterRole/final-kps-grafana-clusterrole   10m
+final-kps-kube-state-metrics   ClusterRole/final-kps-kube-state-metrics   10m
+final-kps-operator   ClusterRole/final-kps-operator   10m
+final-kps-prometheus   ClusterRole/final-kps-prometheus   10m
+
+==> v1/Service
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE
+final-kps-grafana   ClusterIP   10.106.147.127   <none>        80/TCP    10m
+final-kps-kube-state-metrics   ClusterIP   10.111.91.13   <none>   8080/TCP   10m
+final-kps-coredns   ClusterIP   None   <none>   9153/TCP   10m
+final-kps-operator   ClusterIP   10.96.160.201   <none>   8080/TCP   10m
+final-kps-prometheus   ClusterIP   10.102.232.141   <none>   9090/TCP,8080/TCP   10m
+
+==> v1/Deployment
+NAME                READY   UP-TO-DATE   AVAILABLE   AGE
+final-kps-grafana   0/1     1            0           10m
+final-kps-kube-state-metrics   1/1   1     1     10m
+final-kps-operator   1/1   1     1     10m
+
+==> v1/Pod(related)
+NAME                                 READY   STATUS    RESTARTS      AGE
+final-kps-grafana-7b6b8458bc-ws6mg   2/3     Running   5 (53s ago)   10m
+final-kps-kube-state-metrics-64486b456d-xjtm2   1/1   Running   5 (6m30s ago)   10m
+final-kps-operator-5c8744cd9-w45cr   1/1   Running   0     10m
+
+==> v1/ServiceMonitor
+NAME                AGE
+final-kps-grafana   10m
+final-kps-kube-state-metrics   10m
+final-kps-coredns   10m
+final-kps-apiserver   10m
+final-kps-kubelet   10m
+final-kps-operator   10m
+final-kps-prometheus   10m
+
+==> v1/Secret
+NAME                TYPE     DATA   AGE
+final-kps-grafana   Opaque   3      10m
+final-kps-prometheus-token   kubernetes.io/service-account-token   3     10m
+
+==> v1/ConfigMap
+NAME                                  DATA   AGE
+final-kps-grafana-config-dashboards   1      10m
+final-kps-grafana   1     10m
+final-kps-grafana-datasource   1     10m
+final-kps-apiserver   1     10m
+final-kps-cluster-total   1     10m
+final-kps-grafana-overview   1     10m
+final-kps-k8s-coredns   1     10m
+final-kps-k8s-resources-cluster   1     10m
+final-kps-k8s-resources-multicluster   1     10m
+final-kps-k8s-resources-namespace   1     10m
+final-kps-k8s-resources-node   1     10m
+final-kps-k8s-resources-nodes-overview   1     10m
+final-kps-k8s-resources-pod   1     10m
+final-kps-k8s-resources-workload   1     10m
+final-kps-k8s-resources-workloads-namespace   1     10m
+final-kps-kubelet   1     10m
+final-kps-namespace-by-pod   1     10m
+final-kps-namespace-by-workload   1     10m
+final-kps-persistentvolumesusage   1     10m
+final-kps-pod-total   1     10m
+final-kps-prometheus   1     10m
+final-kps-workload-total   1     10m
+
+==> v1/ClusterRole
+NAME                            CREATED AT
+final-kps-grafana-clusterrole   2026-10-07T12:26:13Z
+final-kps-kube-state-metrics   2026-10-07T12:26:13Z
+final-kps-operator   2026-10-07T12:26:13Z
+final-kps-prometheus   2026-10-07T12:26:13Z
+
+==> v1/Prometheus
+NAME                   VERSION              DESIRED   READY   RECONCILED   AVAILABLE   AGE
+final-kps-prometheus   v3.15.0-distroless   1         1       True         True        10m
+
+==> v1/PrometheusRule
+NAME                           AGE
+final-kps-alertmanager.rules   10m
+final-kps-config-reloaders   10m
+final-kps-general.rules   10m
+final-kps-k8s.rules.container-cpu-usage-seconds-total   10m
+final-kps-k8s.rules.container-memory-cache   10m
+final-kps-k8s.rules.container-memory-rss   10m
+final-kps-k8s.rules.container-memory-swap   10m
+final-kps-k8s.rules.container-memory-working-set-bytes   10m
+final-kps-k8s.rules.container-resource   10m
+final-kps-k8s.rules.pod-owner   10m
+final-kps-kube-apiserver-availability.rules   10m
+final-kps-kube-apiserver-burnrate.rules   10m
+final-kps-kube-apiserver-histogram.rules   10m
+final-kps-kube-apiserver-slos   10m
+final-kps-kube-prometheus-general.rules   10m
+final-kps-kube-prometheus-node-recording.rules   10m
+final-kps-kube-state-metrics   10m
+final-kps-kubelet.rules   10m
+final-kps-kubernetes-apps   10m
+final-kps-kubernetes-resources   10m
+final-kps-kubernetes-storage   10m
+final-kps-kubernetes-system-apiserver   10m
+final-kps-kubernetes-system-kubelet   10m
+final-kps-kubernetes-system   10m
+final-kps-node-exporter.rules   10m
+final-kps-node-exporter   10m
+final-kps-node-network   10m
+final-kps-node.rules   10m
+final-kps-prometheus-operator   10m
+final-kps-prometheus   10m
+
+==> v1/ServiceAccount
+NAME                AGE
+final-kps-grafana   10m
+final-kps-kube-state-metrics   10m
+final-kps-operator   10m
+final-kps-prometheus   10m
+
+
+NOTES:
+kube-prometheus-stack has been installed. Check its status by running:
+  kubectl --namespace final-monitoring get pods -l "release=final-kps"
+
+Get Grafana 'admin' user password by running:
+
+  kubectl --namespace final-monitoring get secrets final-kps-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+Access Grafana local instance:
+
+  export POD_NAME=$(kubectl --namespace final-monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=final-kps" -oname)
+  kubectl --namespace final-monitoring port-forward $POD_NAME 3000
+
+Get your grafana admin user password by running:
+
+  kubectl get secret --namespace final-monitoring -l app.kubernetes.io/component=admin-secret -o jsonpath="{.items[0].data.admin-password}" | base64 --decode ; echo
+
+
+Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+
+$ kubectl -n final-monitoring get pods
+NAME                                            READY   STATUS    RESTARTS        AGE
+final-kps-grafana-7b6b8458bc-ws6mg              2/3     Running   5 (53s ago)     10m
+final-kps-kube-state-metrics-64486b456d-xjtm2   1/1     Running   5 (6m30s ago)   10m
+final-kps-operator-5c8744cd9-w45cr              1/1     Running   0               10m
+prometheus-final-kps-prometheus-0               2/2     Running   0               10m
+
+$ kubectl top pods -n final-monitoring
+NAME                                            CPU(cores)   MEMORY(bytes)   
+final-kps-grafana-7b6b8458bc-ws6mg              2178m        369Mi           
+final-kps-kube-state-metrics-64486b456d-xjtm2   3m           25Mi            
+final-kps-operator-5c8744cd9-w45cr              5m           26Mi            
+prometheus-final-kps-prometheus-0               28m          315Mi           
+
+$ kubectl -n final-monitoring describe pod -l app.kubernetes.io/name=grafana | grep -E 'Liveness|Readiness|Restart Count|Last State|Reason|Exit Code' | head -12
+    Last State:      Terminated
+      Reason:        Error
+      Exit Code:     1
+    Restart Count:   2
+    Restart Count:   0
+    Last State:      Terminated
+      Reason:        Error
+      Exit Code:     137
+    Restart Count:   3
+    Liveness:   http-get http://:grafana/api/health delay=60s timeout=30s period=10s successThreshold=1 failureThreshold=10
+    Readiness:  http-get http://:grafana/api/health delay=0s timeout=1s period=10s successThreshold=1 failureThreshold=3
+  Type     Reason     Age                    From               Message
+
+$ kubectl -n final-monitoring get events --field-selector reason=Killing --sort-by=.lastTimestamp | tail -3
+LAST SEEN   TYPE     REASON    OBJECT                                              MESSAGE
+7m10s       Normal   Killing   pod/final-kps-kube-state-metrics-64486b456d-xjtm2   Container kube-state-metrics failed liveness probe, will be restarted
+87s         Normal   Killing   pod/final-kps-grafana-7b6b8458bc-ws6mg              Container grafana failed liveness probe, will be restarted
+
+$ kubectl -n final-monitoring logs deploy/final-kps-grafana -c grafana --previous --tail=200 | grep -iE 'migrat|executing|shutdown|terminated|signal' | tail -8
+logger=storage.unified.migrations t=2026-10-07T12:32:33.815224842Z level=info msg="Migration is disabled in config, skipping" migration=snapshots
+logger=storage.unified.migrations t=2026-10-07T12:32:33.815253259Z level=info msg="Migration is disabled in config, skipping" migration=datasource
+logger=storage.unified.migrations t=2026-10-07T12:32:33.8152588Z level=info msg="Migration is disabled in config, skipping" migration=stars
+logger=storage.unified.migrations t=2026-10-07T12:32:33.815260009Z level=info msg="Migration is disabled in config, skipping" migration=preferences
+logger=storage.unified.migrations t=2026-10-07T12:32:33.815264259Z level=info msg="Migration is disabled in config, skipping" migration=querycacheconfigs
+logger=unifiedstorage-migrator t=2026-10-07T12:32:33.8243438Z level=info msg="Starting DB migrations"
+logger=unifiedstorage-migrator t=2026-10-07T12:32:33.836143259Z level=info msg="migrations completed" performed=0 skipped=4 duration=377.167µs
+logger=storage.unified.migrations t=2026-10-07T12:32:33.836675884Z level=info msg="Unified storage migrations completed successfully"
+
+########## FIX ##########
+# monitoring/prometheus-values.yaml: grafana.livenessProbe.initialDelaySeconds 60 -> 300, readiness timeout 1s -> 5s, defaultDashboardsEnabled: false
+
+$ helm upgrade --install final-kps prometheus-community/kube-prometheus-stack --version 92.1.0 -n final-monitoring -f monitoring/prometheus-values.yaml --wait --timeout 12m
+Release "final-kps" has been upgraded. Happy Helming!
+NAME: final-kps
+LAST DEPLOYED: Wed Oct  7 18:06:52 2026
+NAMESPACE: final-monitoring
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+NOTES:
+kube-prometheus-stack has been installed. Check its status by running:
+  kubectl --namespace final-monitoring get pods -l "release=final-kps"
+
+Get Grafana 'admin' user password by running:
+
+  kubectl --namespace final-monitoring get secrets final-kps-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+Access Grafana local instance:
+
+  export POD_NAME=$(kubectl --namespace final-monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=final-kps" -oname)
+  kubectl --namespace final-monitoring port-forward $POD_NAME 3000
+
+Get your grafana admin user password by running:
+
+  kubectl get secret --namespace final-monitoring -l app.kubernetes.io/component=admin-secret -o jsonpath="{.items[0].data.admin-password}" | base64 --decode ; echo
+
+
+Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+
+########## VERIFY ##########
+
+$ helm list -n final-monitoring
+NAME     	NAMESPACE       	REVISION	UPDATED                             	STATUS  	CHART                       	APP VERSION
+final-kps	final-monitoring	2       	2026-10-07 18:06:52.295686 +0530 IST	deployed	kube-prometheus-stack-92.1.0	v0.94.1    
+
+$ kubectl -n final-monitoring get pods
+NAME                                            READY   STATUS        RESTARTS        AGE
+final-kps-grafana-5c7c67cbd7-qtwzb              3/3     Running       0               21s
+final-kps-grafana-7b6b8458bc-ws6mg              3/3     Terminating   5 (94s ago)     11m
+final-kps-kube-state-metrics-64486b456d-xjtm2   1/1     Running       5 (7m11s ago)   11m
+final-kps-operator-5c8744cd9-w45cr              1/1     Running       0               11m
+prometheus-final-kps-prometheus-0               2/2     Running       0               10m
+
+$ kubectl -n final-monitoring get deploy final-kps-grafana -o jsonpath='{.spec.template.spec.containers[?(@.name=="grafana")].livenessProbe}{"
+"}'
+{"failureThreshold":10,"httpGet":{"path":"/api/health","port":3000,"scheme":"HTTP"},"initialDelaySeconds":300,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":30}
+
+$ kubectl top pods -n final-monitoring
+NAME                                            CPU(cores)   MEMORY(bytes)   
+final-kps-grafana-5c7c67cbd7-qtwzb              1107m        542Mi           
+final-kps-grafana-7b6b8458bc-ws6mg              2965m        410Mi           
+final-kps-kube-state-metrics-64486b456d-xjtm2   3m           25Mi            
+final-kps-operator-5c8744cd9-w45cr              4m           25Mi            
+prometheus-final-kps-prometheus-0               28m          320Mi           
+
+
+########## PART 2 - it came back during the HPA load test ##########
+# About 6 minutes later (while I was logging into Grafana for a screenshot and the
+# load test was running) Grafana went to ~3.8 cores again. My watch loop (excerpt):
+#   for i in $(seq 1 40); do kubectl top pod -n final-monitoring -l app.kubernetes.io/name=grafana ...; sleep 10; done
+18:14:08 cpu=3754m ready/restarts=2/3 0
+18:14:20 cpu=3822m ready/restarts=2/3 0
+18:14:56 cpu=3822m ready/restarts=2/3 0
+18:15:08 cpu=3822m ready/restarts=2/3 0
+Error from server (Timeout): the server was unable to return a response in the time allotted, but may still be processing the request (get pods)
+18:16:18 cpu=3782m ready/restarts=
+Unable to connect to the server: EOF
+18:17:09 cpu=3823m ready/restarts=
+Unable to connect to the server: net/http: TLS handshake timeout
+18:17:52 cpu= ready/restarts=0/3 0
+18:18:32 cpu= ready/restarts=0/3 1
+18:19:13 cpu=135m ready/restarts=1/3 1
+18:19:43 cpu=135m ready/restarts=3/3 3
+# The whole minikube API server stopped answering for ~2 minutes (etcd timeouts in the
+# HPA events too, see outputs/hpa-load-test.txt). Grafana had NO cpu limit, so on a
+# shared 4-CPU node it could take all of it.
+#
+# FIX 2: monitoring/prometheus-values.yaml  grafana.resources.limits.cpu: "1"
+$ helm upgrade final-kps prometheus-community/kube-prometheus-stack --version 92.1.0 -n final-monitoring -f monitoring/prometheus-values.yaml --wait --timeout 12m
+Release "final-kps" has been upgraded. Happy Helming!
+NAME: final-kps
+LAST DEPLOYED: Wed Oct  7 18:20:10 2026
+NAMESPACE: final-monitoring
+STATUS: deployed
+REVISION: 3
+DESCRIPTION: Upgrade complete
+NOTES:
+
+$ kubectl -n final-monitoring get pods
+NAME                                            READY   STATUS    RESTARTS        AGE
+final-kps-grafana-755f675768-sqhdl              3/3     Running   0               25s
+final-kps-kube-state-metrics-64486b456d-xjtm2   1/1     Running   8 (2m51s ago)   24m
+final-kps-operator-5c8744cd9-w45cr              1/1     Running   0               24m
+prometheus-final-kps-prometheus-0               2/2     Running   0               24m
+
+$ kubectl -n final-monitoring get deploy final-kps-grafana -o jsonpath='{.spec.template.spec.containers[?(@.name=="grafana")].resources}'
+{"limits":{"cpu":"1","memory":"768Mi"},"requests":{"cpu":"100m","memory":"192Mi"}}
+$ kubectl top node
+NAME       CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+minikube   248m         1%       2952Mi          37%         

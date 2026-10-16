@@ -1,0 +1,12 @@
+# `kubectl apply -k kubernetes/` applies everything in order
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespace.yaml
+  - 01-configmap.yaml
+  - 02-secret.yaml
+  - 03-postgres.yaml
+  - 04-backend.yaml
+  - 05-frontend.yaml
+  - 06-ingress.yaml
+  - 07-hpa.yaml

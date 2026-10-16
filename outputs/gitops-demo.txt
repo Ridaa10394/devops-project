@@ -1,0 +1,71 @@
+# 1) live sync from my public repo (14-helm/my-web-chart is already on GitHub)
+
+$ kubectl apply -f gitops/demo-application.yaml
+application.argoproj.io/gitops-demo unchanged
+
+$ kubectl -n argocd get applications
+NAME          SYNC STATUS   HEALTH STATUS
+gitops-demo   Synced        Healthy
+
+$ kubectl -n argocd get application gitops-demo -o jsonpath='repo={.spec.source.repoURL} path={.spec.source.path}{"
+"}sync={.status.sync.status} health={.status.health.status} revision={.status.sync.revision}{"
+"}'
+repo=https://github.com/Ridaa10394/DevOps.git path=14-helm/my-web-chart
+sync=Synced health=Healthy revision=a3e8da018721e4ba744eeeb77b6459700863d8d9
+
+$ git ls-remote https://github.com/Ridaa10394/DevOps.git refs/heads/main
+a3e8da018721e4ba744eeeb77b6459700863d8d9	refs/heads/main
+
+$ kubectl -n final-app get deploy,pods,svc,configmap -l app.kubernetes.io/instance=gitops-demo
+NAME                                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/gitops-demo-my-web-chart   2/2     2            2           20s
+
+NAME                                           READY   STATUS    RESTARTS   AGE
+pod/gitops-demo-my-web-chart-ffdc854b6-7r94l   1/1     Running   0          20s
+pod/gitops-demo-my-web-chart-ffdc854b6-hg5tg   1/1     Running   0          20s
+
+NAME                               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+service/gitops-demo-my-web-chart   ClusterIP   10.110.56.215   <none>        80/TCP    20s
+
+NAME                                      DATA   AGE
+configmap/gitops-demo-my-web-chart-html   1      20s
+
+# 2) self-heal: change the cluster by hand, Argo CD puts Git's version back
+
+$ kubectl -n final-app scale deploy/gitops-demo-my-web-chart --replicas=5
+deployment.apps/gitops-demo-my-web-chart scaled
+
+$ kubectl -n final-app get deploy gitops-demo-my-web-chart
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+gitops-demo-my-web-chart   2/5     2            2           20s
+# (a few seconds later)
+
+$ kubectl -n final-app get deploy gitops-demo-my-web-chart
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+gitops-demo-my-web-chart   2/2     2            2           21s
+
+$ kubectl -n argocd get events --field-selector involvedObject.name=gitops-demo --sort-by=.lastTimestamp | tail -5
+1s          Normal   ResourceUpdated      application/gitops-demo   Updated sync status: Synced -> OutOfSync
+1s          Normal   ResourceUpdated      application/gitops-demo   Updated health status: Healthy -> Progressing
+0s          Normal   OperationCompleted   application/gitops-demo   Partial sync operation to a3e8da018721e4ba744eeeb77b6459700863d8d9 succeeded
+0s          Normal   ResourceUpdated      application/gitops-demo   Updated sync status: OutOfSync -> Synced
+0s          Normal   ResourceUpdated      application/gitops-demo   Updated health status: Progressing -> Healthy
+
+# 3) the real Application for this project (final-devops-project/helm/stocksense) - before I push
+
+$ kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml
+appproject.argoproj.io/final-project unchanged
+application.argoproj.io/stocksense unchanged
+
+$ kubectl -n argocd get applications
+NAME          SYNC STATUS   HEALTH STATUS
+gitops-demo   Synced        Healthy
+stocksense    Unknown       Healthy
+
+$ kubectl -n argocd get application stocksense -o jsonpath='{range .status.conditions[*]}{.type}: {.message}{"
+"}{end}' | cut -c1-220
+ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 1: rpc error: code = Unknown desc = final-devops-project/helm/stocksense: app path does not exist
+# ^ expected: the folder isn't on GitHub yet. After 'git push' this Application syncs on its own.
+
+$ kubectl delete -f gitops/argocd-application.yaml
+application.argoproj.io "stocksense" deleted from argocd namespace

@@ -1,0 +1,19 @@
+$ helm upgrade --install final-kps prometheus-community/kube-prometheus-stack --version 92.1.0 -n final-monitoring --create-namespace -f monitoring/prometheus-values.yaml --wait --timeout 10m
+Release "final-kps" does not exist. Installing it now.
+I1007 18:00:04.934192   30043 request.go:754] "Waited before sending request" delay="1.097525458s" reason="retries: 7, retry-after: 1s - retry-reason: due to retryable error, error: Get \"https://127.0.0.1:52640/apis/monitoring.coreos.com/v1/namespaces/final-monitoring/prometheuses?allowWatchBookmarks=true&resourceVersion=22289&timeoutSeconds=432&watch=true\": EOF" verb="GET" URL="https://127.0.0.1:52640/apis/monitoring.coreos.com/v1/namespaces/final-monitoring/prometheuses?allowWatchBookmarks=true&resourceVersion=22289&timeoutSeconds=432&watch=true"
+Error: resource Deployment/final-monitoring/final-kps-grafana not ready. status: InProgress, message: Available: 0/1
+context deadline exceeded
+
+$ kubectl -n final-monitoring get pods,svc
+NAME                                                READY   STATUS    RESTARTS        AGE
+pod/final-kps-grafana-7b6b8458bc-ws6mg              2/3     Running   5 (35s ago)     10m
+pod/final-kps-kube-state-metrics-64486b456d-xjtm2   1/1     Running   5 (6m12s ago)   10m
+pod/final-kps-operator-5c8744cd9-w45cr              1/1     Running   0               10m
+pod/prometheus-final-kps-prometheus-0               2/2     Running   0               10m
+
+NAME                                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/final-kps-grafana              ClusterIP   10.106.147.127   <none>        80/TCP              10m
+service/final-kps-kube-state-metrics   ClusterIP   10.111.91.13     <none>        8080/TCP            10m
+service/final-kps-operator             ClusterIP   10.96.160.201    <none>        8080/TCP            10m
+service/final-kps-prometheus           ClusterIP   10.102.232.141   <none>        9090/TCP,8080/TCP   10m
+service/prometheus-operated            ClusterIP   None             <none>        9090/TCP            10m

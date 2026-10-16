@@ -1,0 +1,131 @@
+
+$ curl http://localhost:18000/health
+{"status":"UP"}
+[HTTP 200]
+
+$ curl http://localhost:18000/ready
+{"status":"READY","database":"ok"}
+[HTTP 200]
+
+$ curl http://localhost:18000/
+{"service":"StockSense API","version":"1.0.0","env":"docker-compose","docs":"/docs"}
+[HTTP 200]
+
+$ curl -s http://localhost:18000/api/items | python3 -m json.tool | head -14
+[
+    {
+        "name": "Cat6 Cable 5m",
+        "category": "Networking",
+        "description": "",
+        "quantity": 64,
+        "reorder_level": 25,
+        "unit_price": "6.40",
+        "supplier": "LinkPro",
+        "sku": "NETW-4001",
+        "id": 6,
+        "stock_status": "IN_STOCK",
+        "created_at": "2026-10-13T10:54:23.692892Z",
+        "updated_at": "2026-10-13T10:54:23.692892Z"
+
+$ curl -X POST http://localhost:18000/api/items -H Content-Type: application/json -d {"sku":"tool-5001","name":"Cordless Drill","category":"Tools","quantity":12,"reorder_level":4,"unit_price":"79.90","supplier":"BuildRight"}
+{"name":"Cordless Drill","category":"Tools","description":"","quantity":12,"reorder_level":4,"unit_price":"79.90","supplier":"BuildRight","sku":"TOOL-5001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-13T10:54:48.837487Z","updated_at":"2026-10-13T10:54:48.837491Z"}
+[HTTP 201]
+
+$ curl http://localhost:18000/api/items/7
+{"name":"Cordless Drill","category":"Tools","description":"","quantity":12,"reorder_level":4,"unit_price":"79.90","supplier":"BuildRight","sku":"TOOL-5001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-13T10:54:48.837487Z","updated_at":"2026-10-13T10:54:48.837491Z"}
+[HTTP 200]
+
+$ curl -X PUT http://localhost:18000/api/items/7 -H Content-Type: application/json -d {"quantity":3,"unit_price":"74.50"}
+{"name":"Cordless Drill","category":"Tools","description":"","quantity":3,"reorder_level":4,"unit_price":"74.50","supplier":"BuildRight","sku":"TOOL-5001","id":7,"stock_status":"LOW_STOCK","created_at":"2026-10-13T10:54:48.837487Z","updated_at":"2026-10-13T10:54:48.876949Z"}
+[HTTP 200]
+
+$ curl -X POST http://localhost:18000/api/items/7/adjust -H Content-Type: application/json -d {"delta":10}
+{"name":"Cordless Drill","category":"Tools","description":"","quantity":13,"reorder_level":4,"unit_price":"74.50","supplier":"BuildRight","sku":"TOOL-5001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-13T10:54:48.837487Z","updated_at":"2026-10-13T10:54:48.886486Z"}
+[HTTP 200]
+
+$ curl http://localhost:18000/api/items/stats
+{"total_items":7,"total_units":252,"low_stock":1,"out_of_stock":1,"inventory_value":"4042.68","categories":5}
+[HTTP 200]
+
+$ curl -X POST http://localhost:18000/api/items -H Content-Type: application/json -d {"sku":"TOOL-5001","name":"dup"}
+{"detail":"SKU TOOL-5001 already exists"}
+[HTTP 409]
+
+$ curl -X DELETE http://localhost:18000/api/items/7
+
+[HTTP 204]
+
+$ curl http://localhost:18000/api/items/7
+{"detail":"Item not found"}
+[HTTP 404]
+
+# through the frontend nginx (port 13000) - SPA + /api proxy
+
+$ curl -s -o /dev/null -w "%{http_code}" http://localhost:13000/
+200
+$ curl -s http://localhost:13000/ | grep -o "<title>.*</title>"
+<title>StockSense</title>
+
+$ curl http://localhost:13000/api/items/stats
+{"total_items":6,"total_units":239,"low_stock":1,"out_of_stock":1,"inventory_value":"3074.18","categories":4}
+[HTTP 200]
+
+$ curl http://localhost:13000/healthz
+ok
+
+[HTTP 200]
+
+$ curl -s http://localhost:18000/metrics | grep -E "^(http_requests_total|stocksense_)" | head -20
+stocksense_inventory_changes_total{action="create"} 1.0
+stocksense_inventory_changes_total{action="update"} 1.0
+stocksense_inventory_changes_total{action="restock"} 1.0
+stocksense_inventory_changes_total{action="delete"} 1.0
+stocksense_inventory_changes_created{action="create"} 1.7918888888403807e+09
+stocksense_inventory_changes_created{action="update"} 1.7918888888780057e+09
+stocksense_inventory_changes_created{action="restock"} 1.7918888888874e+09
+stocksense_inventory_changes_created{action="delete"} 1.7918888889171038e+09
+stocksense_low_stock_items 2.0
+http_requests_total{handler="/",method="GET",status="2xx"} 1.0
+http_requests_total{handler="/api/items",method="GET",status="2xx"} 2.0
+http_requests_total{handler="/api/items",method="POST",status="2xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}",method="GET",status="2xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}",method="PUT",status="2xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}/adjust",method="POST",status="2xx"} 1.0
+http_requests_total{handler="/api/items/stats",method="GET",status="2xx"} 2.0
+http_requests_total{handler="/api/items",method="POST",status="4xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}",method="DELETE",status="2xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}",method="GET",status="4xx"} 1.0
+
+$ docker compose exec postgres psql -U stocksense -d stocksense -c "select version_num from alembic_version;" -c "select id, sku, name, quantity, reorder_level from items order by id;"
+   version_num   
+-----------------
+ 0002_seed_items
+(1 row)
+
+ id |    sku    |         name          | quantity | reorder_level 
+----+-----------+-----------------------+----------+---------------
+  1 | ELEC-1001 | USB-C Charger 65W     |       42 |            15
+  2 | ELEC-1002 | Wireless Mouse        |        8 |            10
+  3 | OFFC-2001 | A4 Paper (500 sheets) |      120 |            40
+  4 | OFFC-2002 | Gel Pens (pack of 10) |        0 |            20
+  5 | FURN-3001 | Ergonomic Chair       |        5 |             3
+  6 | NETW-4001 | Cat6 Cable 5m         |       64 |            25
+(6 rows)
+
+$ docker compose exec backend id ; docker compose exec frontend id
+uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
+uid=101(nginx) gid=101(nginx) groups=101(nginx)
+
+$ docker compose exec backend pip --version   # pip was removed from the runtime image
+OCI runtime exec failed: exec failed: unable to start container process: exec: "pip": executable file not found in $PATH
+
+$ docker compose logs backend | head -9
+backend-1  | database reachable after 1 attempt(s)
+backend-1  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+backend-1  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
+backend-1  | INFO  [alembic.runtime.migration] Running upgrade  -> 0001_create_items, create items table
+backend-1  | INFO  [alembic.runtime.migration] Running upgrade 0001_create_items -> 0002_seed_items, seed a few demo items so the dashboard is not empty on first boot
+backend-1  | INFO:     Started server process [1]
+backend-1  | INFO:     Waiting for application startup.
+backend-1  | INFO:     Application startup complete.
+backend-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

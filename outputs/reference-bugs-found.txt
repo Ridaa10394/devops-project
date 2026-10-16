@@ -1,0 +1,69 @@
+# Bugs I found in the reference TaskBoard project (session21-python) before reusing its structure
+# (run against an untouched copy of the instructor repo)
+
+## 1. terraform/ does not parse
+$ terraform init -backend=false
+Initializing modules...
+
+
+Error: Terraform encountered problems during initialisation, including problems
+with the configuration, described below.
+
+The Terraform configuration must be valid before initialization so that
+Terraform can determine which modules and providers need to be installed.
+
+
+Error: Invalid single-argument block definition
+
+  on main.tf line 1, in module "vpc":
+   1: module "vpc" { source = "terraform-aws-modules/vpc/aws" version = "5.8.1" name = "taskboard-vpc" cidr = "10.20.0.0/16" azs = ["ap-south-1a","ap-south-1b"] private_subnets = ["10.20.1.0/24","10.20.2.0/24"] public_subnets = ["10.20.101.0/24","10.20.102.0/24"] enable_nat_gateway = true single_nat_gateway = true }
+
+A single-line block definition must end with a closing brace immediately
+after its single argument definition.
+
+Error: Invalid single-argument block definition
+
+  on versions.tf line 1, in terraform:
+   1: terraform { required_version = ">= 1.7.0" required_providers { aws = { source = "hashicorp/aws" version = "~> 5.0" } } }
+
+A single-line block definition must end with a closing brace immediately
+after its single argument definition.
+
+## 2. Helm chart: Ingress sends /api to a Service name + port that do not exist
+$ helm template demo helm/taskboard -f helm/taskboard/values-dev.yaml | grep -E "kind: (Service|Ingress)|^  name:|name: taskboard|number:|port:"
+kind: Service
+  name: demo-taskboard-backend
+    - port: 8000
+kind: Service
+  ports: [{port: 80, targetPort: 80}]
+kind: Service
+  ports: [{port: 5432, targetPort: 5432}]
+  name: demo-taskboard-backend
+            httpGet: {path: /ready, port: 8000}
+            httpGet: {path: /health, port: 8000}
+        readinessProbe: {httpGet: {path: /, port: 80}, initialDelaySeconds: 5}
+        livenessProbe: {httpGet: {path: /, port: 80}, initialDelaySeconds: 10}
+kind: Ingress
+      - {path: /api, pathType: Prefix, backend: {service: {name: taskboard-backend, port: {number: 8080}}}}
+      - {path: /, pathType: Prefix, backend: {service: {name: taskboard-frontend, port: {number: 80}}}}
+  name: demo-taskboard-backend
+
+## 3. frontend nginx.conf hard-codes the compose hostname "backend" (no such Service in k8s)
+13:    proxy_pass http://backend:8000;
+21:    proxy_pass http://backend:8000/health;
+
+## 4. vite dev proxy points at :8080 but FastAPI runs on :8000
+2:export default defineConfig({plugins:[react()],server:{port:5173,proxy:{'/api':'http://localhost:8080'}}});
+
+## 5. frontend deps are "latest" (not reproducible, and no package-lock.json for npm ci)
+{"name":"taskboard-frontend","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite","build":"vite build","test":"node --test"},"dependencies":{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest"},"devDependencies":{}}
+
+ls: session21-python/frontend/package-lock.json: No such file or directory
+
+## 6. frontend image runs as root (no USER line in frontend/Dockerfile)
+(no USER line in frontend/Dockerfile -> nginx master runs as root)
+
+## 7. CI image names use github.repository_owner as-is (GHCR rejects upper-case: Ridaa10394)
+40:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }} ./backend
+41:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }} ./frontend
+45:          image-ref: ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }}

@@ -1,0 +1,6 @@
+$ minikube image load stocksense-backend:1.0.0 stocksense-frontend:1.0.0 postgres:16-alpine
+( minikube image load stocksense-backend:1.0.0 && minikube image load  &&      0.28s user 0.50s system 0% cpu 4:32.64 total
+$ minikube image ls | grep -E "stocksense|postgres:16-alpine"
+docker.io/library/stocksense-frontend:1.0.0
+docker.io/library/stocksense-backend:1.0.0
+docker.io/library/postgres:16-alpine

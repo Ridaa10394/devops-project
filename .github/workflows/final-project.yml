@@ -1,0 +1,484 @@
+# Final DevOps Project - StockSense CI/CD + DevSecOps pipeline
+# Ridaa Mirza (24BCS10394)
+#
+# Runs on every push / PR to main of the devops-project repo.
+#
+#   build & test ─┐
+#   iac validate ─┼─> SAST ─> SCA ─> secret scan ─> docker build ─> trivy image ─> security gate
+#   frontend     ─┘                                                                    │
+#                                                  (main only) push to GHCR <──────────┘
+#                                                                   │
+#                                                     deploy to kind with Helm + smoke test
+
+name: Final Project - StockSense CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-project-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: .
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+  # Scanner binaries are pinned + sha256-verified instead of using wrapper actions
+  TRIVY_VERSION: "0.75.0"
+  TRIVY_SHA256: "c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1a. Backend: lint + pytest against a throwaway Postgres, coverage gate 80%
+  # ---------------------------------------------------------------------------
+  backend-test:
+    name: 1a. Backend lint + tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: stocksense_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test -d stocksense_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    defaults:
+      run:
+        working-directory: application/backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: application/backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt && pip check
+
+      - name: Lint (ruff)
+        run: |
+          ruff check --output-format=github .
+          ruff format --check .
+
+      - name: pytest (test DB, never the real one) + coverage gate
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/stocksense_test
+        run: |
+          mkdir -p reports
+          pytest -v --cov=app --cov-report=term-missing \
+            --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml \
+            --cov-fail-under=80
+
+      - name: Alembic migrations against real Postgres
+        env:
+          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/stocksense_test
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic downgrade base
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: application/backend/reports/
+
+  # ---------------------------------------------------------------------------
+  # 1b. Frontend: reproducible install (npm ci) + production build
+  # ---------------------------------------------------------------------------
+  frontend-build:
+    name: 1b. Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: application/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: application/frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: application/frontend/dist/
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # 1c. Infrastructure code: helm lint/template, terraform fmt/validate,
+  #     trivy config (IaC misconfiguration scan), dashboard copy in sync
+  # ---------------------------------------------------------------------------
+  iac-validate:
+    name: 1c. IaC validate (Helm + Terraform)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: helm lint + template (dev and prod values)
+        run: |
+          helm lint helm/stocksense -f helm/stocksense/values-dev.yaml
+          helm lint helm/stocksense -f helm/stocksense/values-prod.yaml --set global.imageTag="${GITHUB_SHA}"
+          helm template stocksense helm/stocksense -f helm/stocksense/values-prod.yaml \
+            --set global.imageTag="${GITHUB_SHA}" > /dev/null
+
+      - name: raw manifests parse (kubectl client dry-run)
+        run: kubectl kustomize kubernetes/ > /dev/null
+
+      - name: terraform fmt + validate (no AWS credentials needed)
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive -diff
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Dashboard copy in the chart is in sync
+        run: |
+          diff -q monitoring/grafana-dashboard.json helm/stocksense/files/grafana-dashboard.json
+
+  # ---------------------------------------------------------------------------
+  # 2. SAST - bandit over the Python source (report mode, the gate decides)
+  # ---------------------------------------------------------------------------
+  sast:
+    name: 2. SAST (bandit)
+    needs: [backend-test, frontend-build, iac-validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "bandit[sarif]==1.9.4"
+      - name: bandit
+        run: |
+          mkdir -p security/reports
+          SRC=(application/backend/app application/backend/alembic)
+          bandit -c security/bandit.yaml -r "${SRC[@]}" || true
+          bandit -c security/bandit.yaml -r "${SRC[@]}" -f json -o security/reports/bandit.json --exit-zero
+          bandit -c security/bandit.yaml -r "${SRC[@]}" -f sarif -o security/reports/bandit.sarif --exit-zero
+      - uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true # needs code scanning enabled on the repo
+        with:
+          sarif_file: security/reports/bandit.sarif
+          category: final-bandit
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-sast
+          path: security/reports/bandit.json
+
+  # ---------------------------------------------------------------------------
+  # 3. SCA - pip-audit (PyPI), npm audit (npm), trivy fs (lockfiles + IaC)
+  # ---------------------------------------------------------------------------
+  sca:
+    name: 3. SCA (pip-audit + npm audit + trivy fs)
+    needs: sast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pip install pip-audit==2.10.1
+
+      - name: Install trivy (pinned + sha256 verified)
+        working-directory: ${{ runner.temp }}
+        run: |
+          f=trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz
+          curl -sSfLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${f}"
+          echo "${TRIVY_SHA256}  ${f}" | sha256sum --check
+          tar -xzf "${f}" trivy && sudo mv trivy /usr/local/bin/
+
+      - name: pip-audit (Python deps)
+        run: |
+          mkdir -p security/reports
+          pip-audit -r application/backend/requirements.txt --desc || true
+          pip-audit -r application/backend/requirements.txt -f json -o security/reports/pip-audit.json || true
+
+      - name: npm audit (frontend deps)
+        working-directory: application/frontend
+        run: |
+          npm audit || true
+          npm audit --json > ../../security/reports/npm-audit.json || true
+
+      - name: trivy fs - lockfiles (vuln) + Dockerfiles/k8s/helm/terraform (misconfig)
+        run: |
+          trivy fs --config security/trivy.yaml --severity HIGH,CRITICAL --no-progress .
+          # misconfig scan is report-only: findings are reviewed in security/README.md
+          trivy config --severity HIGH,CRITICAL --skip-dirs terraform/.terraform --skip-dirs outputs . || true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-sca
+          path: |
+            security/reports/pip-audit.json
+            security/reports/npm-audit.json
+
+  # ---------------------------------------------------------------------------
+  # 4. Secret scan - gitleaks over the project folder
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: 4. Secret scan (gitleaks)
+    needs: sca
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install gitleaks (pinned + sha256 verified)
+        working-directory: ${{ runner.temp }}
+        run: |
+          f=gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${f}"
+          echo "${GITLEAKS_SHA256}  ${f}" | sha256sum --check
+          tar -xzf "${f}" gitleaks && sudo mv gitleaks /usr/local/bin/
+      - name: gitleaks (values redacted in logs)
+        run: |
+          mkdir -p security/reports
+          gitleaks detect --no-git --source . --config security/.gitleaks.toml \
+            --redact -v --exit-code 0 \
+            --report-format json --report-path security/reports/gitleaks.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-secrets
+          path: security/reports/gitleaks.json
+
+  # ---------------------------------------------------------------------------
+  # 5. Docker build - both images, tagged with the commit SHA. Built ONCE and
+  #    passed on as artifacts, so the image that is scanned is the image pushed.
+  # ---------------------------------------------------------------------------
+  docker-build:
+    name: 5. Docker build (${{ matrix.component }})
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    outputs:
+      registry: ${{ steps.meta.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Image name (GHCR needs a lowercase owner)
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${owner}/stocksense-${{ matrix.component }}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: |
+          docker build \
+            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            -t "${{ steps.meta.outputs.image }}" application/${{ matrix.component }}
+          docker image inspect "${{ steps.meta.outputs.image }}" \
+            --format 'User={{.Config.User}} Size={{.Size}}'
+          docker save "${{ steps.meta.outputs.image }}" | gzip > "${RUNNER_TEMP}/${{ matrix.component }}.tar.gz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-${{ matrix.component }}
+          path: ${{ runner.temp }}/${{ matrix.component }}.tar.gz
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 6. Trivy image scan - fails on fixable HIGH/CRITICAL CVEs
+  # ---------------------------------------------------------------------------
+  image-scan:
+    name: 6. Trivy image scan (${{ matrix.component }})
+    needs: docker-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, frontend]
+    env:
+      IMAGE: ${{ needs.docker-build.outputs.registry }}/stocksense-${{ matrix.component }}:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-${{ matrix.component }}
+          path: ${{ runner.temp }}
+      - run: docker load -i "${RUNNER_TEMP}/${{ matrix.component }}.tar.gz"
+      - name: Install trivy (pinned + sha256 verified)
+        working-directory: ${{ runner.temp }}
+        run: |
+          f=trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz
+          curl -sSfLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${f}"
+          echo "${TRIVY_SHA256}  ${f}" | sha256sum --check
+          tar -xzf "${f}" trivy && sudo mv trivy /usr/local/bin/
+      - name: Full report (all severities, for the gate + artifacts)
+        run: |
+          mkdir -p security/reports
+          trivy image --config security/trivy.yaml --no-progress \
+            -f json -o security/reports/trivy-image-${{ matrix.component }}.json "$IMAGE"
+          trivy image --config security/trivy.yaml --no-progress --skip-db-update \
+            --severity HIGH,CRITICAL -f sarif -o security/reports/trivy-image-${{ matrix.component }}.sarif "$IMAGE"
+      - name: Enforce - fail on fixable HIGH/CRITICAL
+        run: |
+          trivy image --skip-db-update --no-progress \
+            --ignorefile security/.trivyignore \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: security/reports/trivy-image-${{ matrix.component }}.sarif
+          category: final-trivy-${{ matrix.component }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-image-${{ matrix.component }}
+          path: security/reports/trivy-image-${{ matrix.component }}.json
+
+  # ---------------------------------------------------------------------------
+  # 7. Security gate - one policy (security/gate-policy.toml) over all reports
+  # ---------------------------------------------------------------------------
+  security-gate:
+    name: 7. Security gate
+    needs: [sast, sca, secret-scan, image-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: report-*
+          merge-multiple: true
+          path: security/reports
+      - name: Apply gate policy
+        run: |
+          ls -l security/reports
+          python security/gate.py --reports security/reports | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+  # ---------------------------------------------------------------------------
+  # 8. Push to GHCR - only after the gate passed, only for pushes to main.
+  #    Tag = commit SHA (traceable back to the exact source), never "latest".
+  # ---------------------------------------------------------------------------
+  push:
+    name: 8. Push images to GHCR
+    needs: [docker-build, security-gate]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: image-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/images
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the exact scanned images
+        working-directory: ${{ runner.temp }}/images
+        env:
+          REGISTRY: ${{ needs.docker-build.outputs.registry }}
+        run: |
+          for c in backend frontend; do
+            docker load -i "$c.tar.gz"
+            docker push "${REGISTRY}/stocksense-$c:${GITHUB_SHA}"
+            echo "Pushed ${REGISTRY}/stocksense-$c:${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  # ---------------------------------------------------------------------------
+  # 9. Deploy to Kubernetes. A GitHub runner can't reach my laptop's minikube,
+  #    so CI creates a throwaway kind cluster and deploys the GHCR images with
+  #    the real Helm chart, then runs `helm test` + a curl smoke test.
+  #    For a real cluster (the EKS from terraform/) swap the kind step for
+  #    `aws eks update-kubeconfig` with OIDC credentials (see README).
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: 9. Deploy to Kubernetes (kind + Helm)
+    needs: [docker-build, push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      REGISTRY: ${{ needs.docker-build.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: final-kind
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the pushed images from GHCR into kind
+        run: |
+          for c in backend frontend; do
+            docker pull "${REGISTRY}/stocksense-$c:${GITHUB_SHA}"
+            kind load docker-image "${REGISTRY}/stocksense-$c:${GITHUB_SHA}" --name final-kind
+          done
+      - name: Install metrics-server (so the HPAs get real numbers)
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          kubectl -n kube-system patch deploy metrics-server --type=json \
+            -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+      - name: helm upgrade --install
+        run: |
+          kubectl apply -f kubernetes/00-namespace.yaml
+          helm upgrade --install stocksense helm/stocksense -n final-app \
+            --set global.imageTag="${GITHUB_SHA}" \
+            --set backend.image.repository="${REGISTRY}/stocksense-backend" \
+            --set frontend.image.repository="${REGISTRY}/stocksense-frontend" \
+            --set backend.image.pullPolicy=Never --set frontend.image.pullPolicy=Never \
+            --wait --timeout 5m
+          kubectl -n final-app get deploy,sts,pods,svc,ingress,hpa,pvc -o wide
+          helm list -n final-app
+      - name: helm test (in-cluster smoke test)
+        run: helm test stocksense -n final-app --logs
+      - name: Smoke test through the frontend Service
+        run: |
+          kubectl -n final-app port-forward svc/stocksense-frontend 8080:80 &
+          sleep 5
+          curl -sf http://localhost:8080/healthz
+          curl -sf http://localhost:8080/api/items/stats
+          echo
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/)" = "200"
+      - name: Debug info on failure
+        if: failure()
+        run: |
+          kubectl -n final-app get all,events --sort-by=.lastTimestamp || true
+          kubectl -n final-app describe pods || true
+          kubectl -n final-app logs -l app.kubernetes.io/instance=stocksense --all-containers --tail=50 || true

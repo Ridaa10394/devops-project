@@ -1,0 +1,38 @@
+$ kubectl -n final-monitoring port-forward svc/final-kps-prometheus 19090:9090
+
+$ curl -s 'localhost:19090/api/v1/targets?state=active'   # job / namespace / url / health
+stocksense-backend       final-app         http://10.244.0.146:8000/metrics                     up
+stocksense-backend       final-app         http://10.244.0.148:8000/metrics                     up
+apiserver                default           https://192.168.49.2:8443/metrics                    up
+coredns                  kube-system       http://10.244.0.2:9153/metrics                       up
+final-kps-grafana        final-monitoring  http://10.244.0.145:3000/metrics                     up
+kube-state-metrics       final-monitoring  http://10.244.0.142:8080/metrics                     up
+kubelet                  kube-system       https://192.168.49.2:10250/metrics                   up
+kubelet                  kube-system       https://192.168.49.2:10250/metrics/cadvisor          up
+kubelet                  kube-system       https://192.168.49.2:10250/metrics/probes            up
+final-kps-operator       final-monitoring  http://10.244.0.143:8080/metrics                     up
+final-kps-prometheus     final-monitoring  http://10.244.0.144:9090/metrics                     up
+final-kps-prometheus     final-monitoring  http://10.244.0.144:8080/metrics                     up
+
+$ kubectl -n final-app get servicemonitor stocksense-backend -o yaml | sed -n "/^spec:/,$p"
+spec:
+  endpoints:
+  - interval: 15s
+    path: /metrics
+    port: http
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: stocksense
+      app.kubernetes.io/name: stocksense-backend
+
+$ curl -s 'localhost:19090/api/v1/rules?type=alert'   # StockSense alert rules loaded from the PrometheusRule
+stocksense.rules: StockSenseBackendDown          state=inactive health=ok
+stocksense.rules: StockSenseHighErrorRate        state=inactive health=ok
+stocksense.rules: StockSenseSlowRequests         state=inactive health=ok
+stocksense.rules: StockSensePodRestarting        state=inactive health=ok
+stocksense.rules: StockSenseManyLowStockItems    state=inactive health=ok
+
+$ curl -s 'localhost:19090/api/v1/query' --data-urlencode 'query=sum by (handler) (rate(http_requests_total{namespace="final-app"}[2m]))'
+/api/items 0.0 req/s
+/api/items/stats 50.9 req/s
+/api/items/{item_id} 0.0 req/s

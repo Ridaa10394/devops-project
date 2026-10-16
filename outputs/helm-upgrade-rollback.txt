@@ -1,0 +1,46 @@
+
+$ helm upgrade stocksense helm/stocksense -n final-app -f helm/stocksense/values-dev.yaml --set appEnv=minikube-v2 --wait --timeout 5m | head -7
+Release "stocksense" has been upgraded. Happy Helming!
+NAME: stocksense
+LAST DEPLOYED: Wed Oct  7 18:22:06 2026
+NAMESPACE: final-app
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+
+$ kubectl -n final-app get configmap stocksense-config -o jsonpath='{.data.APP_ENV}{"
+"}'
+minikube-v2
+
+$ curl -s -w '
+' http://stocksense.localhost:18210/api/items/stats >/dev/null; kubectl -n final-app port-forward svc/stocksense-backend 18002:8000 >/dev/null 2>&1 & sleep 3; curl -s -w '
+' localhost:18002/; kill %1
+{"service":"StockSense API","version":"1.0.0","env":"minikube-v2","docs":"/docs"}
+# ^ the checksum/config annotation rolled the backend pods automatically, so the new APP_ENV is live
+
+$ helm history stocksense -n final-app
+REVISION	UPDATED                 	STATUS    	CHART           	APP VERSION	DESCRIPTION     
+1       	Wed Oct  7 18:07:21 2026	superseded	stocksense-1.0.0	1.0.0      	Install complete
+2       	Wed Oct  7 18:22:06 2026	deployed  	stocksense-1.0.0	1.0.0      	Upgrade complete
+
+$ helm rollback stocksense 1 -n final-app --wait
+Rollback was a success! Happy Helming!
+
+$ helm history stocksense -n final-app
+REVISION	UPDATED                 	STATUS    	CHART           	APP VERSION	DESCRIPTION     
+1       	Wed Oct  7 18:07:21 2026	superseded	stocksense-1.0.0	1.0.0      	Install complete
+2       	Wed Oct  7 18:22:06 2026	superseded	stocksense-1.0.0	1.0.0      	Upgrade complete
+3       	Wed Oct  7 18:22:24 2026	deployed  	stocksense-1.0.0	1.0.0      	Rollback to 1   
+
+$ kubectl -n final-app get configmap stocksense-config -o jsonpath='{.data.APP_ENV}{"
+"}'
+minikube
+
+$ kubectl -n final-app get pods
+NAME                                   READY   STATUS        RESTARTS   AGE
+stocksense-backend-6fd979b7ff-5r7qf    1/1     Terminating   0          31s
+stocksense-backend-7cc46d7f4f-2l9rq    1/1     Running       0          14s
+stocksense-backend-7cc46d7f4f-9x45p    1/1     Running       0          8s
+stocksense-frontend-6d757df4c6-68mng   1/1     Running       0          13s
+stocksense-frontend-6d757df4c6-jdnpl   1/1     Running       0          14s
+stocksense-postgres-0                  1/1     Running       0          15m

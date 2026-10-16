@@ -1,0 +1,36 @@
+# secrets / local config
+.env
+*.env
+!.env.example
+terraform.tfvars
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+*.db
+application/backend/reports/
+
+# node
+node_modules/
+dist/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# scanner output (CI re-creates these; curated copies live in outputs/)
+security/reports/*
+!security/reports/.gitkeep
+
+# misc
+.DS_Store
+*.tgz

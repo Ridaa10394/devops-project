@@ -1,0 +1,32 @@
+# gitleaks config for the final project.
+# Usage (from the repo root):
+#   gitleaks detect --no-git --source . --config security/.gitleaks.toml --redact
+title = "StockSense final project - gitleaks"
+
+# Full built-in rule set (AWS keys, GitHub tokens, private keys, generic API keys...)
+[extend]
+useDefault = true
+
+# Extra rule: a postgres connection string with an inline password that is not
+# one of the obvious placeholders. Catches someone pasting a real DATABASE_URL.
+[[rules]]
+id = "stocksense-db-url-password"
+description = "Postgres URL with an embedded password"
+regex = '''postgres(?:ql)?(?:\+psycopg)?://[A-Za-z0-9_]+:([^@\s'"]{6,})@'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://", "postgresql+psycopg://"]
+  # placeholders used in docs, examples and the throwaway test database
+  [[rules.allowlists]]
+  regexTarget = "secret"
+  regexes = ['''^(change-me|changeme|stocksense-local-only|password|\$\{.*\}|<.*>)$''']
+
+[allowlist]
+description = "generated output, dependencies and local virtualenvs"
+paths = [
+  '''outputs/''',
+  '''security/reports/''',
+  '''node_modules/''',
+  '''\.venv/''',
+  '''\.terraform/''',
+  '''dist/''',
+]

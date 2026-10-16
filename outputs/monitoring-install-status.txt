@@ -1,0 +1,18 @@
+$ helm list -n final-monitoring
+NAME     	NAMESPACE       	REVISION	UPDATED                             	STATUS  	CHART                       	APP VERSION
+final-kps	final-monitoring	2       	2026-10-07 18:06:52.295686 +0530 IST	deployed	kube-prometheus-stack-92.1.0	v0.94.1    
+
+$ kubectl -n final-monitoring get pods,svc
+NAME                                                READY   STATUS        RESTARTS        AGE
+pod/final-kps-grafana-5c7c67cbd7-qtwzb              3/3     Running       0               21s
+pod/final-kps-grafana-7b6b8458bc-ws6mg              3/3     Terminating   5 (94s ago)     11m
+pod/final-kps-kube-state-metrics-64486b456d-xjtm2   1/1     Running       5 (7m11s ago)   11m
+pod/final-kps-operator-5c8744cd9-w45cr              1/1     Running       0               11m
+pod/prometheus-final-kps-prometheus-0               2/2     Running       0               10m
+
+NAME                                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/final-kps-grafana              ClusterIP   10.106.147.127   <none>        80/TCP              11m
+service/final-kps-kube-state-metrics   ClusterIP   10.111.91.13     <none>        8080/TCP            11m
+service/final-kps-operator             ClusterIP   10.96.160.201    <none>        8080/TCP            11m
+service/final-kps-prometheus           ClusterIP   10.102.232.141   <none>        9090/TCP,8080/TCP   11m
+service/prometheus-operated            ClusterIP   None             <none>        9090/TCP            10m

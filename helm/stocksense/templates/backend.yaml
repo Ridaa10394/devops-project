@@ -1,0 +1,102 @@
+{{- $fullname := include "stocksense.fullname" . }}
+{{- $image := include "stocksense.image" (list . .Values.backend.image) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-backend
+  labels:
+    {{- include "stocksense.labels" . | nindent 4 }}
+    {{- include "stocksense.selector" (list . "backend") | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.backend.enabled }}
+  replicas: {{ .Values.backend.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      {{- include "stocksense.selector" (list . "backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "stocksense.labels" . | nindent 8 }}
+        {{- include "stocksense.selector" (list . "backend") | nindent 8 }}
+      annotations:
+        # roll the pods when config or credentials change
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.backend.migrations.enabled }}
+      initContainers:
+        - name: migrate
+          image: {{ $image }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["sh", "-c", "python -m app.wait_for_db && alembic upgrade head"]
+          envFrom:
+            - configMapRef: {name: {{ $fullname }}-config}
+            - secretRef: {name: {{ include "stocksense.secretName" . }}}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+      {{- end }}
+      containers:
+        - name: backend
+          image: {{ $image }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: {{ .Values.backend.port }}}
+          env:
+            - {name: RUN_MIGRATIONS, value: "false"}
+          envFrom:
+            - configMapRef: {name: {{ $fullname }}-config}
+            - secretRef: {name: {{ include "stocksense.secretName" . }}}
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-backend
+  labels:
+    {{- include "stocksense.labels" . | nindent 4 }}
+    {{- include "stocksense.selector" (list . "backend") | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "stocksense.selector" (list . "backend") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.backend.port }}
+      targetPort: http

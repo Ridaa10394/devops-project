@@ -1,0 +1,44 @@
+# `helm test <release>` - checks the API, the readiness (DB) endpoint and the
+# frontend -> backend proxy from inside the cluster.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "stocksense.fullname" . }}-smoke-test
+  labels:
+    {{- include "stocksense.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: smoke
+      image: {{ include "stocksense.image" (list . .Values.backend.image) }}
+      imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+      securityContext:
+        {{- toYaml .Values.containerSecurityContext | nindent 8 }}
+      command:
+        - python
+        - -c
+        - |
+          import json, urllib.request
+          be = "http://{{ include "stocksense.fullname" . }}-backend:{{ .Values.backend.port }}"
+          fe = "http://{{ include "stocksense.fullname" . }}-frontend"
+          def get(url):
+              with urllib.request.urlopen(url, timeout=5) as r:
+                  print(r.status, url)
+                  return r.read()
+          assert json.loads(get(be + "/health"))["status"] == "UP"
+          assert json.loads(get(be + "/ready"))["status"] == "READY"
+          assert isinstance(json.loads(get(be + "/api/items")), list)
+          assert b"http_requests_total" in get(be + "/metrics")
+          assert b"<div id=\"root\">" in get(fe + "/")
+          assert "total_items" in json.loads(get(fe + "/api/items/stats"))
+          print("smoke test passed")
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}

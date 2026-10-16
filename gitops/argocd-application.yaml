@@ -1,0 +1,45 @@
+# Argo CD Application - the cluster pulls the Helm chart straight from GitHub
+# and keeps it in sync. Git is the source of truth: a change merged to main
+# under helm/stocksense is rolled out without anyone
+# running `helm upgrade` by hand, and manual drift in the cluster is reverted.
+#
+#   kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml
+#   argocd app get stocksense        (or the Argo CD UI)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stocksense
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io # deleting the app deletes what it deployed
+spec:
+  project: final-project
+  source:
+    repoURL: https://github.com/Ridaa10394/devops-project.git
+    targetRevision: main
+    path: helm/stocksense
+    helm:
+      releaseName: stocksense
+      valueFiles:
+        - values.yaml
+      # Which build to run. CI pushes ghcr.io/ridaa10394/stocksense-{backend,frontend}:<sha>;
+      # promoting a release = changing this one line in Git (PR -> merge -> Argo syncs).
+      parameters:
+        - name: global.imageTag
+          value: "REPLACE_WITH_GIT_SHA_FROM_CI"
+        - name: ingress.host
+          value: stocksense.localhost
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stocksense
+  syncPolicy:
+    automated:
+      prune: true      # resources removed from Git are removed from the cluster
+      selfHeal: true   # kubectl edits in the cluster get reverted to what Git says
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: {duration: 10s, factor: 2, maxDuration: 3m}
+  revisionHistoryLimit: 5

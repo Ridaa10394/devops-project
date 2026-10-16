@@ -1,0 +1,35 @@
+# Needs metrics-server AND cpu requests on the containers (percentages are of the request).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stocksense-backend
+  namespace: final-app
+  labels: {app.kubernetes.io/part-of: stocksense}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: stocksense-backend}
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 60}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60 # shorter than the 5 min default so the demo scales back
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stocksense-frontend
+  namespace: final-app
+  labels: {app.kubernetes.io/part-of: stocksense}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: stocksense-frontend}
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}

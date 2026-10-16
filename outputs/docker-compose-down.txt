@@ -1,0 +1,22 @@
+$ docker compose down -v
+ Container stocksense-frontend-1 Stopping 
+ Container stocksense-frontend-1 Stopped 
+ Container stocksense-frontend-1 Removing 
+ Container stocksense-frontend-1 Removed 
+ Container stocksense-backend-1 Stopping 
+ Container stocksense-backend-1 Stopped 
+ Container stocksense-backend-1 Removing 
+ Container stocksense-backend-1 Removed 
+ Container stocksense-postgres-1 Stopping 
+ Container stocksense-postgres-1 Stopped 
+ Container stocksense-postgres-1 Removing 
+ Container stocksense-postgres-1 Removed 
+ Volume stocksense_postgres-data Removing 
+ Network stocksense_backend-net Removing 
+ Network stocksense_frontend-net Removing 
+ Volume stocksense_postgres-data Removed 
+ Network stocksense_backend-net Removed 
+ Network stocksense_frontend-net Removed 
+
+$ docker compose ps -a
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS

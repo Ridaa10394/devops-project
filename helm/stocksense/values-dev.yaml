@@ -1,0 +1,22 @@
+# Local minikube: images were built on the laptop and loaded with
+# `minikube image load`, so no registry is involved.
+backend:
+  image:
+    repository: stocksense-backend
+    tag: "1.0.0"
+frontend:
+  image:
+    repository: stocksense-frontend
+    tag: "1.0.0"
+appEnv: minikube
+auth:
+  password: local-minikube-only
+ingress:
+  host: stocksense.localhost
+monitoring:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  grafanaDashboard:
+    enabled: true

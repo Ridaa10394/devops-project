@@ -1,0 +1,43 @@
+# Production-style values (EKS from ../../terraform). Image tag comes from CI:
+#   helm upgrade --install stocksense helm/stocksense -n stocksense \
+#     -f helm/stocksense/values-prod.yaml --set global.imageTag=<git sha>
+appEnv: production
+global:
+  imagePullSecrets: []   # GHCR packages are public; add a pull secret if made private
+backend:
+  replicaCount: 3
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+frontend:
+  replicaCount: 2
+postgres:
+  enabled: true          # switch to false + externalDatabase.host for Amazon RDS
+  storage: 20Gi
+  storageClass: gp3
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+auth:
+  existingSecret: stocksense-db   # created out-of-band (External Secrets / kubectl), never committed
+ingress:
+  host: stocksense.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - secretName: stocksense-tls
+      hosts: [stocksense.example.com]
+autoscaling:
+  backend:
+    minReplicas: 3
+    maxReplicas: 10
+  frontend:
+    minReplicas: 2
+    maxReplicas: 6
+monitoring:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  grafanaDashboard:
+    enabled: true

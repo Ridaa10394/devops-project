@@ -1,0 +1,21 @@
+# AppProject: limits what the StockSense Application is allowed to touch.
+# Only this repo, only the stocksense namespace, no cluster-scoped objects
+# except the Namespace itself.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: final-project
+  namespace: argocd
+spec:
+  description: DevOps final project - StockSense (Ridaa Mirza, 24BCS10394)
+  sourceRepos:
+    - https://github.com/Ridaa10394/devops-project.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: stocksense
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

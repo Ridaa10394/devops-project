@@ -1,0 +1,51 @@
+# ingress-nginx port-forwarded to the Mac: kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 18210:80
+# (*.localhost resolves to 127.0.0.1 by itself, so the Host header is stocksense.localhost without editing /etc/hosts)
+
+$ curl -s -o /dev/null -w 'GET http://stocksense.localhost:18210/ -> HTTP %{http_code}
+' http://stocksense.localhost:18210/
+GET http://stocksense.localhost:18210/ -> HTTP 200
+
+$ curl -s -w '
+' http://stocksense.localhost:18210/api/items/stats
+{"total_items":6,"total_units":239,"low_stock":1,"out_of_stock":1,"inventory_value":"3074.18","categories":4}
+
+$ curl -s -w '
+HTTP %{http_code}
+' -X POST http://stocksense.localhost:18210/api/items -H 'Content-Type: application/json' -d '{"sku":"HELM-0001","name":"Deployed with Helm","category":"Demo","quantity":4,"reorder_level":5,"unit_price":"2.50"}'
+{"name":"Deployed with Helm","category":"Demo","description":"","quantity":4,"reorder_level":5,"unit_price":"2.50","supplier":"Unknown","sku":"HELM-0001","id":7,"stock_status":"LOW_STOCK","created_at":"2026-10-07T12:38:11.776144Z","updated_at":"2026-10-07T12:38:11.776150Z"}
+HTTP 201
+
+$ curl -s -w '
+HTTP %{http_code}
+' -X PUT http://stocksense.localhost:18210/api/items/7 -H 'Content-Type: application/json' -d '{"quantity":40}'
+{"name":"Deployed with Helm","category":"Demo","description":"","quantity":40,"reorder_level":5,"unit_price":"2.50","supplier":"Unknown","sku":"HELM-0001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-07T12:38:11.776144Z","updated_at":"2026-10-07T12:38:11.828108Z"}
+HTTP 200
+
+$ curl -s -w '
+HTTP %{http_code}
+' http://stocksense.localhost:18210/api/items/7
+{"name":"Deployed with Helm","category":"Demo","description":"","quantity":40,"reorder_level":5,"unit_price":"2.50","supplier":"Unknown","sku":"HELM-0001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-07T12:38:11.776144Z","updated_at":"2026-10-07T12:38:11.828108Z"}
+HTTP 200
+
+# /metrics straight from the backend Service (Prometheus text format)
+
+$ kubectl -n final-app port-forward svc/stocksense-backend 18001:8000 >/dev/null 2>&1 & sleep 3; curl -s http://localhost:18001/metrics | grep -E '^# (HELP|TYPE) (http_requests_total|stocksense_)|^http_requests_total|^stocksense_|^http_request_duration_seconds_count' | head -30; kill %1
+# HELP stocksense_inventory_changes_total Inventory write operations
+# TYPE stocksense_inventory_changes_total counter
+stocksense_inventory_changes_total{action="update"} 1.0
+# HELP stocksense_inventory_changes_created Inventory write operations
+# TYPE stocksense_inventory_changes_created gauge
+stocksense_inventory_changes_created{action="update"} 1.7913766918301625e+09
+# HELP stocksense_low_stock_items Items at or below their reorder level
+# TYPE stocksense_low_stock_items gauge
+stocksense_low_stock_items 2.0
+# HELP http_requests_total Total number of requests by method, status and handler.
+# TYPE http_requests_total counter
+http_requests_total{handler="/api/items",method="GET",status="2xx"} 1.0
+http_requests_total{handler="/api/items/stats",method="GET",status="2xx"} 2.0
+http_requests_total{handler="/api/items/{item_id}",method="PUT",status="2xx"} 1.0
+http_requests_total{handler="/api/items/{item_id}",method="GET",status="2xx"} 1.0
+http_request_duration_seconds_count{handler="/api/items",method="GET"} 1.0
+http_request_duration_seconds_count{handler="/api/items/stats",method="GET"} 2.0
+http_request_duration_seconds_count{handler="/api/items/{item_id}",method="PUT"} 1.0
+http_request_duration_seconds_count{handler="/api/items/{item_id}",method="GET"} 1.0

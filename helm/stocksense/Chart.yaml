@@ -1,0 +1,9 @@
+apiVersion: v2
+name: stocksense
+description: StockSense inventory app (React + FastAPI + PostgreSQL) - DevOps final project, Ridaa Mirza 24BCS10394
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords: [inventory, fastapi, react, postgres]
+maintainers:
+  - name: Ridaa Mirza

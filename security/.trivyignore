@@ -1,0 +1,12 @@
+# Trivy ignore list - accepted risks for the StockSense images.
+#
+# Rules for adding an entry:
+#   1. One CVE per line, with a comment above it: WHY it is accepted, WHO
+#      accepted it, and WHEN it must be re-reviewed.
+#   2. Only for findings that do not affect this app or have no fix yet.
+#   3. Never add something just to turn the gate green.
+#
+# Example:
+# # CVE-YYYY-NNNNN - <pkg>, only reachable via <feature> the app never calls.
+# # Accepted by Ridaa Mirza 2026-10-07, review by 2026-11-07.
+# CVE-YYYY-NNNNN

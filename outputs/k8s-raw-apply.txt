@@ -1,0 +1,21 @@
+$ kubectl apply -k kubernetes/
+namespace/final-app created
+configmap/stocksense-config created
+secret/stocksense-db created
+service/stocksense-backend created
+service/stocksense-frontend created
+service/stocksense-postgres created
+deployment.apps/stocksense-backend created
+deployment.apps/stocksense-frontend created
+statefulset.apps/stocksense-postgres created
+horizontalpodautoscaler.autoscaling/stocksense-backend created
+horizontalpodautoscaler.autoscaling/stocksense-frontend created
+ingress.networking.k8s.io/stocksense created
+
+$ kubectl -n final-app rollout status statefulset/stocksense-postgres deploy/stocksense-backend deploy/stocksense-frontend
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 of 2 updated replicas are available...
+deployment "stocksense-backend" successfully rolled out
+deployment "stocksense-frontend" successfully rolled out

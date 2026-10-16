@@ -1,0 +1,26 @@
+# /api -> FastAPI backend, everything else -> React frontend.
+# Host is stocksense.localhost: browsers and curl resolve *.localhost to 127.0.0.1
+# on their own, so no /etc/hosts edit is needed when the ingress controller is
+# port-forwarded to the laptop.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stocksense
+  namespace: final-app
+  labels: {app.kubernetes.io/part-of: stocksense}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: stocksense.localhost
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: {name: stocksense-backend, port: {number: 8000}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: stocksense-frontend, port: {number: 80}}

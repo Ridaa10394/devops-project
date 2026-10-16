@@ -1,0 +1,11 @@
+# Bandit (SAST) config for the StockSense backend.
+# Run from the repo root:
+#   bandit -c security/bandit.yaml -r application/backend/app application/backend/alembic
+#
+# tests/ is excluded because pytest uses bare `assert` everywhere (B101).
+exclude_dirs:
+  - tests
+  - .venv
+# Nothing is skipped globally. If a check ever has to be silenced, do it inline
+# with `# nosec BXXX` and a comment explaining why.
+skips: []

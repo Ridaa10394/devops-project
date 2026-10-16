@@ -1,0 +1,21 @@
+# 1) the real project folder
+$ gitleaks detect --no-git --source . --config security/.gitleaks.toml --redact
+5:37PM INF scanned ~233051 bytes (233.05 KB) in 26ms
+5:37PM INF no leaks found
+exit code: 0
+
+# 2) proof the custom rule fires: a scratch .env with a fake DATABASE_URL password (outside the repo)
+$ cat leakdemo/.env
+DATABASE_URL=postgresql+psycopg://admin:<fake-password-redacted-here>@db.example.com/x
+$ gitleaks detect --no-git --source leakdemo --config security/.gitleaks.toml --redact -v
+Finding:     postgresql+psycopg://admin:REDACTED@
+Secret:      REDACTED
+RuleID:      stocksense-db-url-password
+Entropy:     3.681881
+File:        leakdemo/.env
+Line:        1
+Fingerprint: leakdemo/.env:stocksense-db-url-password:1
+
+5:37PM INF scanned ~77 bytes (77 bytes) in 11.9ms
+5:37PM WRN leaks found: 1
+exit code: 1

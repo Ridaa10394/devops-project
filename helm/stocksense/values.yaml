@@ -1,0 +1,103 @@
+# Default values for the StockSense chart.
+# Override per environment with values-dev.yaml / values-prod.yaml or --set.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# One tag for both images - CI sets this to the git commit SHA:
+#   --set global.imageTag=${GITHUB_SHA}
+global:
+  imageTag: ""
+  imagePullSecrets: []   # e.g. [{name: ghcr-pull}] for a private GHCR package
+
+appEnv: kubernetes
+
+backend:
+  image:
+    repository: ghcr.io/ridaa10394/stocksense-backend
+    tag: ""              # falls back to global.imageTag, then .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  port: 8000
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  migrations:
+    enabled: true        # initContainer runs `alembic upgrade head` before the API starts
+
+frontend:
+  image:
+    repository: ghcr.io/ridaa10394/stocksense-frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  port: 8080
+  resources:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+
+postgres:
+  enabled: true          # false = use an external DB (e.g. Amazon RDS) via externalDatabase.host
+  image: postgres:16-alpine
+  database: stocksense
+  storage: 1Gi
+  storageClass: ""       # "" = cluster default
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+externalDatabase:
+  host: ""
+  port: 5432
+
+# Database credentials.
+# existingSecret: name of a Secret with keys DB_USER and DB_PASSWORD that you
+# created yourself (recommended for anything real). If empty, the chart creates
+# one from the values below - fine for a throwaway local cluster only.
+auth:
+  existingSecret: ""
+  username: stocksense
+  password: ""           # empty = random 20-char password generated on first install
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  host: stocksense.localhost
+  annotations: {}
+  tls: []                # [{secretName: stocksense-tls, hosts: [stocksense.example.com]}]
+
+autoscaling:
+  backend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 60
+  frontend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+
+monitoring:
+  serviceMonitor:
+    enabled: false       # needs the Prometheus Operator CRDs (kube-prometheus-stack)
+    interval: 15s
+    labels:
+      release: kube-prometheus-stack
+  prometheusRule:
+    enabled: false
+    labels:
+      release: kube-prometheus-stack
+  grafanaDashboard:
+    enabled: false       # ConfigMap picked up by the Grafana sidecar (label grafana_dashboard=1)
+
+podSecurityContext:
+  seccompProfile: {type: RuntimeDefault}
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}

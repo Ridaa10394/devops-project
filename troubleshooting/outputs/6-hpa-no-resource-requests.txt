@@ -1,0 +1,66 @@
+########## BREAK ##########
+
+$ kubectl apply -f troubleshooting/broken/6-hpa-no-resource-requests.yaml
+deployment.apps/stocksense-backend configured
+
+$ kubectl -n final-app rollout status deploy/stocksense-backend --timeout=180s
+Waiting for deployment spec update to be observed...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "stocksense-backend" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+deployment "stocksense-backend" successfully rolled out
+
+# waiting until metrics-server has samples for the new pods (otherwise the HPA only says 'did not receive metrics')
+
+########## INVESTIGATE ##########
+
+$ kubectl -n final-app get hpa stocksense-backend
+NAME                 REFERENCE                       TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+stocksense-backend   Deployment/stocksense-backend   cpu: <unknown>/60%   2         5         2          11m
+
+$ kubectl -n final-app describe hpa stocksense-backend | sed -n '/Conditions:/,$p' | grep -E 'ScalingActive|missing request|Type|----' | head -8
+  Type            Status  Reason                   Message
+  ----            ------  ------                   -------
+  ScalingActive   False   FailedGetResourceMetric  the HPA was unable to compute the replica count: failed to get cpu utilization: missing request for cpu in container backend of Pod stocksense-backend-59fd545649-z25qd
+  Type     Reason                        Age                  From                       Message
+  ----     ------                        ----                 ----                       -------
+
+$ kubectl -n final-app get deploy stocksense-backend -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{": resources="}{.resources}{"
+"}{end}'
+backend: resources={}
+
+$ kubectl top pods -n final-app -l app=stocksense-backend
+NAME                                  CPU(cores)   MEMORY(bytes)   
+stocksense-backend-59fd545649-8m74j   2m           66Mi            
+stocksense-backend-59fd545649-z25qd   2m           83Mi            
+
+# metrics-server HAS the usage numbers - the HPA just can't turn them into a % without a cpu request
+
+########## FIX ##########
+
+$ kubectl apply -f troubleshooting/fixed/6-hpa-no-resource-requests.yaml
+deployment.apps/stocksense-backend configured
+
+$ kubectl -n final-app rollout status deploy/stocksense-backend --timeout=180s
+Waiting for deployment "stocksense-backend" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "stocksense-backend" rollout to finish: 1 old replicas are pending termination...
+deployment "stocksense-backend" successfully rolled out
+
+########## VERIFY ##########
+
+$ kubectl -n final-app get hpa stocksense-backend
+NAME                 REFERENCE                       TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+stocksense-backend   Deployment/stocksense-backend   cpu: 2%/60%   2         5         2          13m
+
+$ kubectl -n final-app describe hpa stocksense-backend | grep -E 'ScalingActive'
+  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from cpu resource utilization (percentage of request)

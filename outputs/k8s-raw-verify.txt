@@ -1,0 +1,247 @@
+
+$ kubectl get ns final-app --show-labels
+NAME        STATUS   AGE   LABELS
+final-app   Active   40s   app.kubernetes.io/part-of=stocksense,kubernetes.io/metadata.name=final-app,owner=ridaa-mirza
+
+$ kubectl -n final-app get deploy,sts,pods,svc,endpoints,ingress,hpa,pvc,configmap,secret -o wide
+Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice
+NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES                      SELECTOR
+deployment.apps/stocksense-backend    2/2     2            2           40s   backend      stocksense-backend:1.0.0    app=stocksense-backend
+deployment.apps/stocksense-frontend   2/2     2            2           40s   frontend     stocksense-frontend:1.0.0   app=stocksense-frontend
+
+NAME                                   READY   AGE   CONTAINERS   IMAGES
+statefulset.apps/stocksense-postgres   1/1     40s   postgres     postgres:16-alpine
+
+NAME                                       READY   STATUS    RESTARTS   AGE   IP             NODE       NOMINATED NODE   READINESS GATES
+pod/stocksense-backend-59496b7dbd-6sqfg    1/1     Running   0          40s   10.244.0.106   minikube   <none>           <none>
+pod/stocksense-backend-59496b7dbd-c2v5w    1/1     Running   0          40s   10.244.0.104   minikube   <none>           <none>
+pod/stocksense-frontend-6b5c74ccc8-7d4r4   1/1     Running   0          40s   10.244.0.105   minikube   <none>           <none>
+pod/stocksense-frontend-6b5c74ccc8-9b6cx   1/1     Running   0          40s   10.244.0.103   minikube   <none>           <none>
+pod/stocksense-postgres-0                  1/1     Running   0          40s   10.244.0.107   minikube   <none>           <none>
+
+NAME                          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE   SELECTOR
+service/stocksense-backend    ClusterIP   10.102.21.69    <none>        8000/TCP   40s   app=stocksense-backend
+service/stocksense-frontend   ClusterIP   10.97.175.187   <none>        80/TCP     40s   app=stocksense-frontend
+service/stocksense-postgres   ClusterIP   None            <none>        5432/TCP   40s   app=stocksense-postgres
+
+NAME                            ENDPOINTS                             AGE
+endpoints/stocksense-backend    10.244.0.104:8000,10.244.0.106:8000   40s
+endpoints/stocksense-frontend   10.244.0.103:8080,10.244.0.105:8080   40s
+endpoints/stocksense-postgres   10.244.0.107:5432                     40s
+
+NAME                                   CLASS   HOSTS                  ADDRESS        PORTS   AGE
+ingress.networking.k8s.io/stocksense   nginx   stocksense.localhost   192.168.49.2   80      40s
+
+NAME                                                      REFERENCE                        TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/stocksense-backend    Deployment/stocksense-backend    cpu: <unknown>/60%   2         5         2          40s
+horizontalpodautoscaler.autoscaling/stocksense-frontend   Deployment/stocksense-frontend   cpu: <unknown>/70%   2         4         2          40s
+
+NAME                                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-stocksense-postgres-0   Bound    pvc-1f076fc2-29d4-47ea-9cae-eafbfc319b91   1Gi        RWO            standard       <unset>                 40s   Filesystem
+
+NAME                          DATA   AGE
+configmap/kube-root-ca.crt    1      40s
+configmap/stocksense-config   5      40s
+
+NAME                   TYPE     DATA   AGE
+secret/stocksense-db   Opaque   2      40s
+
+$ kubectl -n final-app describe configmap stocksense-config
+Name:         stocksense-config
+Namespace:    final-app
+Labels:       app.kubernetes.io/part-of=stocksense
+Annotations:  <none>
+
+Data
+====
+APP_ENV:
+----
+kubernetes
+
+BACKEND_URL:
+----
+http://stocksense-backend:8000
+
+DB_HOST:
+----
+stocksense-postgres
+
+DB_NAME:
+----
+stocksense
+
+DB_PORT:
+----
+5432
+
+
+BinaryData
+====
+
+Events:  <none>
+
+$ kubectl -n final-app get secret stocksense-db -o jsonpath='{.data}' | sed -E 's/"DB_PASSWORD":"[^"]+"/"DB_PASSWORD":"<redacted>"/'
+{"DB_PASSWORD":"<redacted>","DB_USER":"c3RvY2tzZW5zZQ=="}
+$ kubectl -n final-app get pod -l app=stocksense-backend -o jsonpath='{range .items[*]}{.metadata.name}{"  startup="}{.spec.containers[0].startupProbe.httpGet.path}{" readiness="}{.spec.containers[0].readinessProbe.httpGet.path}{" liveness="}{.spec.containers[0].livenessProbe.httpGet.path}{" user="}{.spec.securityContext.runAsUser}{"
+"}{end}'
+stocksense-backend-59496b7dbd-6sqfg  startup=/health readiness=/ready liveness=/health user=10001
+stocksense-backend-59496b7dbd-c2v5w  startup=/health readiness=/ready liveness=/health user=10001
+
+$ kubectl -n final-app describe pod -l app=stocksense-backend | grep -E '^Name:|Init Containers|migrate:|State:|Reason|Ready:|Liveness|Readiness|Startup|Requests|cpu|memory' | head -40
+Name:             stocksense-backend-59496b7dbd-6sqfg
+Init Containers:
+  migrate:
+    State:          Terminated
+      Reason:       Completed
+    Ready:          True
+      cpu:     300m
+      memory:  256Mi
+    Requests:
+      cpu:     50m
+      memory:  96Mi
+    State:          Running
+    Ready:          True
+      cpu:     500m
+      memory:  256Mi
+    Requests:
+      cpu:      100m
+      memory:   128Mi
+    Liveness:   http-get http://:http/health delay=0s timeout=3s period=15s successThreshold=1 failureThreshold=3
+    Readiness:  http-get http://:http/ready delay=0s timeout=3s period=10s successThreshold=1 failureThreshold=3
+    Startup:    http-get http://:http/health delay=0s timeout=1s period=3s successThreshold=1 failureThreshold=20
+Name:             stocksense-backend-59496b7dbd-c2v5w
+Init Containers:
+  migrate:
+    State:          Terminated
+      Reason:       Completed
+    Ready:          True
+      cpu:     300m
+      memory:  256Mi
+    Requests:
+      cpu:     50m
+      memory:  96Mi
+    State:          Running
+    Ready:          True
+      cpu:     500m
+      memory:  256Mi
+    Requests:
+      cpu:      100m
+      memory:   128Mi
+    Liveness:   http-get http://:http/health delay=0s timeout=3s period=15s successThreshold=1 failureThreshold=3
+
+$ kubectl -n final-app logs -l app=stocksense-backend -c migrate --prefix --tail=20
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] [1/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] [2/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] [3/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] [4/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] database reachable after 5 attempt(s)
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] INFO  [alembic.runtime.migration] Will assume transactional DDL.
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] INFO  [alembic.runtime.migration] Running upgrade  -> 0001_create_items, create items table
+[pod/stocksense-backend-59496b7dbd-6sqfg/migrate] INFO  [alembic.runtime.migration] Running upgrade 0001_create_items -> 0002_seed_items, seed a few demo items so the dashboard is not empty on first boot
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] [1/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] [2/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] [3/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] [4/30] database not ready: failed to resolve host 'stocksense-postgres': [Errno -2] Name or service not known
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] database reachable after 5 attempt(s)
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+[pod/stocksense-backend-59496b7dbd-c2v5w/migrate] INFO  [alembic.runtime.migration] Will assume transactional DDL.
+
+$ kubectl -n final-app describe pvc
+Name:          data-stocksense-postgres-0
+Namespace:     final-app
+StorageClass:  standard
+Status:        Bound
+Volume:        pvc-1f076fc2-29d4-47ea-9cae-eafbfc319b91
+Labels:        app=stocksense-postgres
+Annotations:   pv.kubernetes.io/bind-completed: yes
+               pv.kubernetes.io/bound-by-controller: yes
+               volume.beta.kubernetes.io/storage-provisioner: k8s.io/minikube-hostpath
+               volume.kubernetes.io/storage-provisioner: k8s.io/minikube-hostpath
+Finalizers:    [kubernetes.io/pvc-protection]
+Capacity:      1Gi
+Access Modes:  RWO
+VolumeMode:    Filesystem
+Used By:       stocksense-postgres-0
+Conditions:
+  Type     Status  LastProbeTime                     LastTransitionTime                Reason        Message
+  ----     ------  -----------------                 ------------------                ------        -------
+  Unused   False   Mon, 01 Jan 0001 00:00:00 +0000   Wed, 07 Oct 2026 17:42:12 +0530   PodUsingPVC   A pod is currently referencing this PVC
+Events:
+  Type    Reason                 Age   From                                                                    Message
+  ----    ------                 ----  ----                                                                    -------
+  Normal  Provisioning           41s   k8s.io/minikube-hostpath_minikube_f0ed81ae-75db-415a-8571-da7377fd75cb  External provisioner is provisioning volume for claim "final-app/data-stocksense-postgres-0"
+  Normal  ExternalProvisioning   41s   persistentvolume-controller                                             Waiting for a volume to be created either by the external provisioner 'k8s.io/minikube-hostpath' or manually by the system administrator. If volume creation is delayed, please verify that the provisioner is running and correctly registered.
+  Normal  ProvisioningSucceeded  41s   k8s.io/minikube-hostpath_minikube_f0ed81ae-75db-415a-8571-da7377fd75cb  Successfully provisioned volume pvc-1f076fc2-29d4-47ea-9cae-eafbfc319b91
+
+$ kubectl -n final-app exec stocksense-postgres-0 -- psql -U stocksense -d stocksense -c 'select version_num from alembic_version' -c 'select count(*) as items from items'
+   version_num   
+-----------------
+ 0002_seed_items
+(1 row)
+
+ items 
+-------
+     6
+(1 row)
+
+
+$ kubectl -n final-app describe ingress stocksense
+Name:             stocksense
+Labels:           app.kubernetes.io/part-of=stocksense
+Namespace:        final-app
+Address:          192.168.49.2
+Ingress Class:    nginx
+Default backend:  <default>
+Rules:
+  Host                  Path  Backends
+  ----                  ----  --------
+  stocksense.localhost  
+                        /api   stocksense-backend:8000 (10.244.0.106:8000,10.244.0.104:8000)
+                        /      stocksense-frontend:80 (10.244.0.105:8080,10.244.0.103:8080)
+Annotations:            nginx.ingress.kubernetes.io/proxy-body-size: 1m
+Events:
+  Type    Reason  Age                From                      Message
+  ----    ------  ----               ----                      -------
+  Normal  Sync    32s (x2 over 41s)  nginx-ingress-controller  Scheduled for sync
+
+# ingress test from the Mac: kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 18210:80
+
+$ curl -s -o /dev/null -w 'GET / -> HTTP %{http_code}
+' http://stocksense.localhost:18210/
+GET / -> HTTP 200
+
+$ curl -s http://stocksense.localhost:18210/ | grep -o '<title>.*</title>'
+<title>StockSense</title>
+
+$ curl -s -w '
+' http://stocksense.localhost:18210/api/items/stats
+{"total_items":6,"total_units":239,"low_stock":1,"out_of_stock":1,"inventory_value":"3074.18","categories":4}
+
+$ curl -s -w '
+HTTP %{http_code}
+' -X POST http://stocksense.localhost:18210/api/items -H 'Content-Type: application/json' -d '{"sku":"K8S-0001","name":"Created through the Ingress","category":"Demo","quantity":7,"reorder_level":2,"unit_price":"1.00"}'
+{"name":"Created through the Ingress","category":"Demo","description":"","quantity":7,"reorder_level":2,"unit_price":"1.00","supplier":"Unknown","sku":"K8S-0001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-07T12:12:53.442418Z","updated_at":"2026-10-07T12:12:53.442423Z"}
+HTTP 201
+
+
+$ curl -s -w '
+HTTP %{http_code}
+' -H 'Host: stocksense.localhost' 'http://127.0.0.1:18210/api/items?q=K8S'
+[{"name":"Created through the Ingress","category":"Demo","description":"","quantity":7,"reorder_level":2,"unit_price":"1.00","supplier":"Unknown","sku":"K8S-0001","id":7,"stock_status":"IN_STOCK","created_at":"2026-10-07T12:12:53.442418Z","updated_at":"2026-10-07T12:12:53.442423Z"}]
+HTTP 200
+
+# a minute or two later, once metrics-server has samples for the new pods:
+
+$ kubectl -n final-app get hpa
+NAME                  REFERENCE                        TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+stocksense-backend    Deployment/stocksense-backend    cpu: 3%/60%   2         5         2          2m1s
+stocksense-frontend   Deployment/stocksense-frontend   cpu: 4%/70%   2         4         2          2m1s
+
+$ kubectl top pods -n final-app
+NAME                                   CPU(cores)   MEMORY(bytes)   
+stocksense-backend-59496b7dbd-6sqfg    3m           64Mi            
+stocksense-backend-59496b7dbd-c2v5w    3m           64Mi            
+stocksense-frontend-6b5c74ccc8-7d4r4   1m           11Mi            
+stocksense-frontend-6b5c74ccc8-9b6cx   1m           12Mi            
+stocksense-postgres-0                  6m           29Mi            
