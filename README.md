@@ -5,6 +5,8 @@ Enrollment No: 24BCS10394
 
 StockSense is a small inventory management app (React + FastAPI + PostgreSQL) that I used to take one application all the way from my laptop to a monitored Kubernetes cluster: tests, Docker, a CI/CD pipeline with security gates, Terraform for AWS, raw Kubernetes manifests, a Helm chart, Prometheus/Grafana, Argo CD, and a troubleshooting challenge where I broke it on purpose (and once by accident).
 
+**Presentation:** [`StockSense-Final-Presentation.pptx`](StockSense-Final-Presentation.pptx) - 24 slides walking through the whole project, with the full explanation in the speaker notes of every slide.
+
 Everything shown here was run for real on my MacBook (Apple Silicon, Docker Desktop, minikube with the docker driver). Every terminal screenshot is rendered from the saved output in [`outputs/`](outputs/) - nothing is typed in by hand. The few things that need AWS credentials or a `git push` are marked **TODO** with the exact commands.
 
 ---
@@ -72,7 +74,7 @@ devops-project/
 │                             Deployments, Services, Ingress, HPAs, probes (kustomization.yaml)
 ├── helm/stocksense/          Helm chart: values.yaml, values-dev.yaml, values-prod.yaml, helm test
 ├── terraform/                AWS VPC (2 public + 2 private subnets) + EKS with a managed node group
-├── .github/workflows/        README + read-only copy of the pipeline (the real one is at the repo root)
+├── .github/workflows/        final-project.yml (the CI/CD + DevSecOps pipeline) + README
 ├── security/                 bandit / gitleaks / trivy configs, gate-policy.toml, gate.py
 ├── monitoring/               kube-prometheus-stack values, ServiceMonitor, alert rules, Grafana dashboard
 ├── gitops/                   Argo CD values, AppProject, Application (+ a live demo Application)
