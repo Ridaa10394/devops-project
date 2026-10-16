@@ -1,5 +1,4 @@
-# GitOps demo I ran before this repo (devops-project) was pushed: for a live
-# sync I pointed Argo CD at a chart that already was on GitHub - my own
+# Live GitOps demo: Argo CD syncing a chart that is on GitHub - my own
 # Session 15 chart (14-helm/my-web-chart, plain nginx) in my course repo
 # Ridaa10394/DevOps.
 # Same mechanics as argocd-application.yaml: Git -> Argo CD -> cluster,

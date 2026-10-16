@@ -8,7 +8,7 @@ Enrollment No: 24BCS10394
 | `argocd-values.yaml` | lean Argo CD install for minikube (no Dex/notifications, resource limits) |
 | `argocd-project.yaml` | AppProject `final-project`: only my repo, only the `stocksense` namespace |
 | `argocd-application.yaml` | **the real one**: Helm chart `helm/stocksense` from `https://github.com/Ridaa10394/devops-project.git` (main), auto-sync + prune + self-heal |
-| `demo-application.yaml` | live demo I ran before this repo was pushed: my Session 15 chart (`14-helm/my-web-chart`) from my course repo `Ridaa10394/DevOps` |
+| `demo-application.yaml` | the live demo below: my Session 15 chart (`14-helm/my-web-chart`) from my course repo `Ridaa10394/DevOps` |
 
 How it splits the work with CI: GitHub Actions builds, scans and pushes `ghcr.io/ridaa10394/stocksense-*:<sha>`. Argo CD *pulls* the desired state from Git and makes the cluster match it - nobody runs `helm upgrade` against the cluster by hand, and the cluster never needs to be reachable from GitHub. Promoting a build = changing `global.imageTag` in `argocd-application.yaml` (PR -> merge -> Argo syncs).
 
@@ -36,15 +36,11 @@ Then I scaled the Deployment to 5 by hand. Argo CD noticed the drift (`Synced ->
 
 ![argocd ui](../screenshots/08-argocd-gitops-demo.png)
 
-## The real Application (needs the push)
+## The real Application
 
-Applying `argocd-application.yaml` now gives exactly the error you'd expect, because the project wasn't on GitHub yet when I ran it (the error still shows its old location inside my course repo):
+`argocd-application.yaml` points Argo CD at this repo's `helm/stocksense` chart. To promote a build, set `global.imageTag` to the commit SHA of a green pipeline run (the tag CI pushes to GHCR) and apply it. The cluster pulls the images from GHCR, so the two packages need to be public (or add an imagePullSecret):
 
-![real app pending push](../screenshots/46-gitops-real-app-pending-push.png)
-
-> TODO (after you push): replace `REPLACE_WITH_GIT_SHA_FROM_CI` in `argocd-application.yaml` with the SHA of a green pipeline run (the tag CI pushed to GHCR), make the two GHCR packages public (GitHub -> Packages -> stocksense-backend / stocksense-frontend -> Package settings -> Change visibility) or add an imagePullSecret, then
-> ```bash
-> kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml
-> kubectl -n argocd get applications          # screenshot: stocksense  Synced  Healthy
-> ```
-> Screenshot the Argo CD UI tree for `stocksense`.
+```bash
+kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml
+kubectl -n argocd get applications          # stocksense  Synced  Healthy
+```

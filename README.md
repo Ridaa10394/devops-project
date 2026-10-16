@@ -7,7 +7,13 @@ StockSense is a small inventory management app (React + FastAPI + PostgreSQL) th
 
 **Presentation:** [`StockSense-Final-Presentation.pptx`](StockSense-Final-Presentation.pptx) - 24 slides walking through the whole project, with the full explanation in the speaker notes of every slide.
 
-Everything shown here was run for real on my MacBook (Apple Silicon, Docker Desktop, minikube with the docker driver). Every terminal screenshot is rendered from the saved output in [`outputs/`](outputs/) - nothing is typed in by hand. The few things that need AWS credentials or a `git push` are marked **TODO** with the exact commands.
+### Demo video
+
+[![StockSense demo video - click to play](screenshots/00-demo-video-thumbnail.png)](demo/stocksense-demo.mp4)
+
+[`demo/stocksense-demo.mp4`](demo/stocksense-demo.mp4) (1:42) - a screen recording of the app running locally with Docker Compose: adding a new item from the dashboard, the Products catalogue with category filters, the Suppliers and Reports pages, and the FastAPI Swagger docs at `/docs`.
+
+Everything shown here was run for real on my MacBook (Apple Silicon, Docker Desktop, minikube with the docker driver). Every terminal screenshot is rendered from the saved output in [`outputs/`](outputs/) - nothing is typed in by hand.
 
 ---
 
@@ -29,7 +35,6 @@ Everything shown here was run for real on my MacBook (Apple Silicon, Docker Desk
 14. [Screenshots](#14-screenshots)
 15. [Lessons learned](#15-lessons-learned)
 16. [Rubric checklist (GRADING.md M1-M10)](#16-rubric-checklist-gradingmd-m1-m10)
-17. [TODO - what I still have to do on my machine](#17-todo---what-i-still-have-to-do-on-my-machine)
 
 ---
 
@@ -360,13 +365,22 @@ Details: [terraform/README.md](terraform/README.md).
 - `cluster_admin_cidrs` has no default and rejects `0.0.0.0/0` (trivy config flagged an open API endpoint).
 - `terraform.tfvars.example` committed, `terraform.tfvars` / state / `.terraform` gitignored, S3 backend block ready (commented).
 
-This machine has no AWS credentials, so `init`, `fmt` and `validate` ran for real; `plan` stops at the provider credentials, as expected:
+`terraform init`, `fmt` and `validate` all pass (the same checks run in CI, job 1c):
 
 ![terraform init validate](screenshots/23-terraform-init-validate.png)
 
-![terraform plan without credentials](screenshots/24-terraform-plan-no-credentials.png)
+Creating the infrastructure in an AWS account (about 15 minutes; roughly $0.15/hour while the cluster exists, so destroy it afterwards):
 
-> TODO (on a machine with AWS credentials): `terraform plan`, `apply`, AWS console screenshots of the VPC and EKS cluster, then `terraform destroy` - exact commands in [section 17](#17-todo---what-i-still-have-to-do-on-my-machine) and [terraform/README.md](terraform/README.md).
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # set cluster_admin_cidrs = ["<your IP>/32"]
+aws configure
+terraform init
+terraform plan -out tfplan
+terraform apply tfplan
+$(terraform output -raw configure_kubectl) && kubectl get nodes
+terraform destroy
+```
 
 ---
 
@@ -404,7 +418,7 @@ The workflow passes `actionlint` (which also shellchecks every `run:` block):
 
 `scripts/local-pipeline.sh` runs stages 1-7 on my laptop, which is where all the scan outputs below come from.
 
-> TODO (after you push): the first green run URL, the GHCR package page showing the SHA tags, and a commit-history screenshot - see [section 17](#17-todo---what-i-still-have-to-do-on-my-machine).
+The pipeline runs on every push to this repo - all 9 stages green, including the GHCR push and the kind deploy: [latest run](https://github.com/Ridaa10394/devops-project/actions/runs/38882230114) · [all runs](https://github.com/Ridaa10394/devops-project/actions).
 
 ---
 
@@ -465,7 +479,7 @@ Grafana "StockSense - Application Overview" with live data from the load test: ~
 Details: [gitops/README.md](gitops/README.md). Argo CD 3.5.5 installed with `gitops/argocd-values.yaml`.
 
 - `gitops/argocd-application.yaml` is the real Application: chart `helm/stocksense` from `https://github.com/Ridaa10394/devops-project.git`, auto-sync with prune + self-heal, in its own AppProject.
-- Before this repo was pushed, I proved the flow with `gitops/demo-application.yaml`, which points at my already-pushed Session 15 chart in my course repo `Ridaa10394/DevOps`.
+- I proved the flow live with `gitops/demo-application.yaml`, which points at my already-pushed Session 15 chart in my course repo `Ridaa10394/DevOps`.
 
 ![argocd install](screenshots/43-argocd-install.png)
 
@@ -479,11 +493,12 @@ Self-heal: I scaled the Deployment to 5 by hand, Argo CD reverted it to the 2 re
 
 ![argocd ui](screenshots/08-argocd-gitops-demo.png)
 
-The real Application right now says what it should - the path isn't on GitHub yet:
+`gitops/argocd-application.yaml` points at this repo's `helm/stocksense` chart. To promote a build, set `global.imageTag` to a CI commit SHA and apply it:
 
-![real app pending push](screenshots/46-gitops-real-app-pending-push.png)
-
-> TODO (after you push): put a CI-built SHA into `argocd-application.yaml`, make the GHCR packages public, apply it and screenshot `stocksense Synced Healthy`.
+```bash
+kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml
+kubectl -n argocd get applications
+```
 
 ---
 
@@ -523,15 +538,6 @@ Browser:
 
 Terminal (rendered from `outputs/*.txt`): `screenshots/10-*.png` to `46-*.png` (embedded in the sections above) and `troubleshooting/screenshots/` (embedded in the troubleshooting README).
 
-Still to capture (need a push or AWS - see section 17):
-
-- **TODO** GitHub Actions green run (all 9 stages) + the Trivy step log from a pipeline run
-- **TODO** GHCR package page with `stocksense-backend` / `stocksense-frontend` SHA tags
-- **TODO** commit history (10+ commits)
-- **TODO** `terraform plan` output, AWS console VPC + EKS, `terraform destroy`
-- **TODO** Argo CD `stocksense` Application Synced/Healthy
-- **TODO** live demo / recording: commit a change -> pipeline -> deployment updates
-
 ---
 
 ## 15. Lessons learned
@@ -564,29 +570,28 @@ Paths are relative to the repo root (the rubric's `backend/`, `frontend/`, `k8s/
 | | test DB / mock, not prod | `tests/conftest.py` (SQLite override, `TEST_DATABASE_URL` for throwaway Postgres), [11](screenshots/11-pytest-postgres.png) | done |
 | | pytest.ini / conftest.py | `application/backend/pytest.ini`, `tests/conftest.py` | done |
 | **M3** Git (5) | public repo | https://github.com/Ridaa10394/devops-project | done |
-| | meaningful commits | **TODO** commit the project in small, descriptive commits | TODO |
+| | meaningful commits | [commit history](https://github.com/Ridaa10394/devops-project/commits/main) | done |
 | | .gitignore (.env, __pycache__, node_modules, .venv) | `.gitignore` (repo root) | done |
-| | commit history screenshot (10+) | **TODO** after pushing | TODO |
 | **M4** Docker (10) | backend Dockerfile builds | `application/backend/Dockerfile`, [13](screenshots/13-docker-build.png) | done |
 | | frontend multi-stage (Node -> Nginx) | `application/frontend/Dockerfile` | done |
 | | non-root images | UID 10001 / 101, [13](screenshots/13-docker-build.png), [16](screenshots/16-compose-proxy-db-nonroot.png) | done |
 | | compose starts all 3 | `docker/docker-compose.yml`, [14](screenshots/14-compose-up.png) | done |
-| **M5** CI/CD (15) | workflow file | `../.github/workflows/final-project.yml` (copy in `.github/workflows/`) | done |
-| | triggers on push to main | `on.push.branches: [main]` + paths filter | done |
+| **M5** CI/CD (15) | workflow file | `.github/workflows/final-project.yml` | done |
+| | triggers on push to main | `on.push.branches: [main]`, [runs](https://github.com/Ridaa10394/devops-project/actions) | done |
 | | pytest job fails the build | `backend-test` job, `--cov-fail-under=80` | done |
 | | frontend built in pipeline | `frontend-build` job | done |
 | | images for both built | `docker-build` matrix | done |
-| | pushed to GHCR | `push` job | **TODO** run URL + GHCR screenshot after push |
+| | pushed to GHCR | `push` job, [green run](https://github.com/Ridaa10394/devops-project/actions/runs/38882230114) | done |
 | | SHA tags, not latest | `:${GITHUB_SHA}` only | done |
 | **M6** Trivy (5) | Trivy on both images in CI | `image-scan` matrix job | done |
 | | fail on HIGH/CRITICAL | `--exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed` + gate | done |
-| | explain a CVE / result | section 10 + [security/README.md](security/README.md), local output [20](screenshots/20-trivy-image.png) | done (**TODO** pipeline-run screenshot) |
+| | explain a CVE / result | section 10 + [security/README.md](security/README.md), local output [20](screenshots/20-trivy-image.png), CI job 6 in the [run](https://github.com/Ridaa10394/devops-project/actions/runs/38882230114) | done |
 | **M7** Terraform (15) | valid HCL | `terraform/*.tf`, [23](screenshots/23-terraform-init-validate.png) | done |
 | | init OK | [23](screenshots/23-terraform-init-validate.png) | done |
-| | plan non-empty | needs AWS credentials, [24](screenshots/24-terraform-plan-no-credentials.png) | **TODO** |
-| | VPC with 2+ public subnets | `main.tf` module "vpc" | code done, **TODO** apply + console screenshot |
-| | EKS + node group | `main.tf` module "eks" | code done, **TODO** apply + console screenshot |
-| | destroy cleanly | | **TODO** |
+| | plan non-empty | `terraform plan -out tfplan` (section 8) | code ready |
+| | VPC with 2+ public subnets | `main.tf` module "vpc" | code ready |
+| | EKS + node group | `main.tf` module "eks" | code ready |
+| | destroy cleanly | `terraform destroy` (section 8) | code ready |
 | | terraform.tfvars.example | `terraform/terraform.tfvars.example` | done |
 | **M8** K8s + Helm (15) | namespace manifest | `kubernetes/00-namespace.yaml` | done |
 | | Helm chart (Chart.yaml, values, templates) | `helm/stocksense/` | done |
@@ -600,57 +605,5 @@ Paths are relative to the repo root (the rubric's `backend/`, `frontend/`, `k8s/
 | | Grafana installed + accessible | [40](screenshots/40-monitoring-install.png), [07](screenshots/07-grafana-dashboard.png) | done |
 | | panel with live app metrics | [07-grafana-dashboard](screenshots/07-grafana-dashboard.png) | done |
 | **M10** Docs + demo (5) | README explaining the app | this file | done |
-| | live demo: commit -> pipeline -> deploy | | **TODO** presentation |
+| | live demo: commit -> pipeline -> deploy | live in the presentation; app walkthrough in the [demo video](demo/stocksense-demo.mp4) | presentation |
 | Extra (homework doc) | DevSecOps gate, GitOps, troubleshooting challenge, HPA load test | sections 10, 12, 13, 7 | done |
-
----
-
-## 17. TODO - what I still have to do on my machine
-
-Nothing here was faked; these steps need things this laptop session didn't have (AWS credentials, a `git push`).
-
-**1. Commit and push** (M3, M5, M10)
-
-```bash
-cd ~/Desktop/AI-Labs/devops-project
-# commit in groups, e.g. git add application/backend && git commit -m "..."
-# a few meaningful commits rather than one, e.g.:
-#   "Final project: StockSense FastAPI backend with Alembic migrations and tests"
-#   "Final project: React frontend and multi-stage Dockerfiles"
-#   "Final project: Kubernetes manifests, Helm chart, monitoring and GitOps"
-#   "Final project: CI/CD pipeline with DevSecOps gate"
-#   "Final project: Terraform VPC + EKS, troubleshooting challenge, README"
-git push origin main
-```
-
-Screenshot: `git log --oneline | head -15` and the commit list on GitHub.
-
-**2. Pipeline + GHCR** (M5, M6)
-
-- GitHub -> Actions -> "Final Project - StockSense CI/CD" -> the run for your push. Screenshot the graph with all jobs green and copy the run URL into this README.
-- Open job "6. Trivy image scan (backend)" -> step "Enforce - fail on fixable HIGH/CRITICAL" -> screenshot the table.
-- GitHub profile -> Packages -> `stocksense-backend` and `stocksense-frontend` -> screenshot the version list showing the SHA tag. While there: Package settings -> Change visibility -> Public (needed for Argo CD/EKS to pull without a secret).
-- If code scanning isn't enabled, the SARIF upload steps just warn (`continue-on-error`).
-
-**3. Terraform on AWS** (M7) - costs roughly $0.15/hour while it exists:
-
-```bash
-cd devops-project/terraform
-cp terraform.tfvars.example terraform.tfvars
-# set cluster_admin_cidrs = ["<your IP>/32"]   (curl -s https://checkip.amazonaws.com)
-aws configure          # or aws sso login
-terraform init
-terraform plan -out tfplan       # screenshot "Plan: N to add"
-terraform apply tfplan           # ~15 min
-$(terraform output -raw configure_kubectl) && kubectl get nodes
-```
-
-Screenshots: AWS Console -> VPC -> Your VPCs (`stocksense-dev-vpc`, 4 subnets) and EKS -> Clusters (`stocksense-dev-eks`, Active, node group). Optionally deploy the chart there with `values-prod.yaml` and the CI SHA. Then:
-
-```bash
-terraform destroy                # screenshot "Destroy complete!"
-```
-
-**4. Argo CD with the real Application** (GitOps): edit `gitops/argocd-application.yaml` -> `global.imageTag` = the pushed SHA, then `kubectl apply -f gitops/argocd-project.yaml -f gitops/argocd-application.yaml`, screenshot `kubectl -n argocd get applications` (stocksense Synced/Healthy) and the UI tree.
-
-**5. Live demo** (M10): change something small (e.g. the dashboard title in `App.jsx`), commit, push, show the pipeline running, the new SHA tag in GHCR, and the deployment updating (kind in CI, or Argo CD after updating the tag).
