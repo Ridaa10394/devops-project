@@ -5,7 +5,7 @@ Enrollment No: 24BCS10394
 
 StockSense is a small inventory management app (React + FastAPI + PostgreSQL) that I used to take one application all the way from my laptop to a monitored Kubernetes cluster: tests, Docker, a CI/CD pipeline with security gates, Terraform for AWS, raw Kubernetes manifests, a Helm chart, Prometheus/Grafana, Argo CD, and a troubleshooting challenge where I broke it on purpose (and once by accident).
 
-**Presentation:** [`StockSense-Final-Presentation.pptx`](StockSense-Final-Presentation.pptx) - 24 slides walking through the whole project, with the full explanation in the speaker notes of every slide.
+**Presentation:** [`demo/StockSense-Final-Presentation.pptx`](demo/StockSense-Final-Presentation.pptx) - 24 slides walking through the whole project, with the full explanation in the speaker notes of every slide.
 
 ### Demo video
 
